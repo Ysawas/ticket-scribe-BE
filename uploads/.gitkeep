@@ -1,0 +1,3 @@
+
+# This file ensures that the uploads directory is created
+# but its contents (uploaded files) are not committed to git
