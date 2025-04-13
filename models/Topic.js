@@ -1,5 +1,5 @@
-
-const mongoose = require('mongoose');
+// models/Topic.js
+import mongoose from 'mongoose';
 
 const TopicSchema = new mongoose.Schema({
   name: {
@@ -34,4 +34,4 @@ const TopicSchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('Topic', TopicSchema);
+export default mongoose.model('Topic', TopicSchema);

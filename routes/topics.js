@@ -1,9 +1,8 @@
-
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { check } = require('express-validator');
-const topicController = require('../controllers/topicController');
-const auth = require('../middleware/auth');
+import { check } from 'express-validator';
+import * as topicController from '../controllers/topicController.js';
+import auth from '../middleware/auth.js';
 
 // @route   GET /api/topics
 // @desc    Get all topics
@@ -15,11 +14,6 @@ router.get('/', auth, topicController.getAllTopics);
 // @access  Private
 router.get('/:id', auth, topicController.getTopicById);
 
-// @route   GET /api/topics/type/:type
-// @desc    Get topics by type
-// @access  Private
-router.get('/type/:type', auth, topicController.getTopicsByType);
-
 // @route   POST /api/topics
 // @desc    Create a new topic
 // @access  Private
@@ -27,8 +21,8 @@ router.post(
   '/',
   [
     auth,
-    check('name', 'Name is required').notEmpty(),
-    check('type', 'Type must be software, hardware, server, category, or other').isIn(['software', 'hardware', 'server', 'category', 'other'])
+    check('category', 'Category is required').notEmpty(),
+    check('subcategory', 'Subcategory is required').notEmpty()
   ],
   topicController.createTopic
 );
@@ -40,8 +34,8 @@ router.put(
   '/:id',
   [
     auth,
-    check('name', 'Name is required').optional().notEmpty(),
-    check('type', 'Type must be software, hardware, server, category, or other').optional().isIn(['software', 'hardware', 'server', 'category', 'other'])
+    check('category', 'Category is required').optional().notEmpty(),
+    check('subcategory', 'Subcategory is required').optional().notEmpty()
   ],
   topicController.updateTopic
 );
@@ -51,4 +45,4 @@ router.put(
 // @access  Private
 router.delete('/:id', auth, topicController.deleteTopic);
 
-module.exports = router;
+export default router;

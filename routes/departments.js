@@ -1,9 +1,8 @@
-
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { check } = require('express-validator');
-const departmentController = require('../controllers/departmentController');
-const auth = require('../middleware/auth');
+import { check } from 'express-validator';
+import * as departmentController from '../controllers/departmentController.js';
+import auth from '../middleware/auth.js';
 
 // @route   GET /api/departments
 // @desc    Get all departments
@@ -22,7 +21,8 @@ router.post(
   '/',
   [
     auth,
-    check('name', 'Name is required').notEmpty()
+    check('name', 'Name is required').notEmpty(),
+    check('code', 'Code is required').notEmpty()
   ],
   departmentController.createDepartment
 );
@@ -34,7 +34,8 @@ router.put(
   '/:id',
   [
     auth,
-    check('name', 'Name is required').optional().notEmpty()
+    check('name', 'Name is required').optional().notEmpty(),
+    check('code', 'Code is required').optional().notEmpty()
   ],
   departmentController.updateDepartment
 );
@@ -44,4 +45,4 @@ router.put(
 // @access  Private (admin only)
 router.delete('/:id', auth, departmentController.deleteDepartment);
 
-module.exports = router;
+export default router;

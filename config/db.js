@@ -1,17 +1,19 @@
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const connectDB = async () => {
+  console.log('DB Config: Connecting to MongoDB...');
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log(`MongoDB connected: ${conn.connection.host}`);
+    console.log(`DB Config: MongoDB connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
+    console.error('DB Config: Error connecting to MongoDB:', error.message);
     process.exit(1);
+  } finally {
+    console.log('DB Config: connectDB function completed');
   }
 };
 
-module.exports = connectDB;
+export default connectDB;

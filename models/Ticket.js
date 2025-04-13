@@ -1,14 +1,13 @@
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const CommentSchema = new mongoose.Schema({
-  content: {
-    type: String,
-    required: true
-  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
+    required: true
+  },
+  content: {
+    type: String,
     required: true
   },
   createdAt: {
@@ -22,6 +21,11 @@ const CommentSchema = new mongoose.Schema({
 });
 
 const HistoryEntrySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   field: {
     type: String,
     required: true
@@ -31,11 +35,6 @@ const HistoryEntrySchema = new mongoose.Schema({
   },
   newValue: {
     type: mongoose.Schema.Types.Mixed
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
   },
   timestamp: {
     type: Date,
@@ -56,10 +55,12 @@ const AttachmentSchema = new mongoose.Schema({
     required: true
   },
   mimetype: {
-    type: String
+    type: String,
+    required: true //  Crucial for validation
   },
   size: {
-    type: Number
+    type: Number,
+    required: true
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -72,7 +73,7 @@ const AttachmentSchema = new mongoose.Schema({
 });
 
 const TicketSchema = new mongoose.Schema({
-  number: {
+  ticketNumber: {
     type: String,
     unique: true
   },
@@ -82,19 +83,27 @@ const TicketSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    required: true,
+    minlength: 10,
+    maxlength: 500
   },
   status: {
     type: String,
-    enum: ['open', 'pending', 'closed'],
+    enum: ['open', 'in progress', 'resolved', 'closed'],
     default: 'open'
+  },
+  progress: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
   },
   priority: {
     type: String,
-    enum: ['low', 'medium', 'high'],
+    enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium'
   },
-  createdById: {
+  authorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
@@ -105,15 +114,25 @@ const TicketSchema = new mongoose.Schema({
   },
   departmentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Department'
+    ref: 'Department',
+    required: true
   },
   topicId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Topic'
+    ref: 'Topic',
+    required: true
+  },
+  attachments: [AttachmentSchema],
+  escalatedToDepartmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Department'
+  },
+  escalationApprovedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   comments: [CommentSchema],
   history: [HistoryEntrySchema],
-  attachments: [AttachmentSchema],
   createdAt: {
     type: Date,
     default: Date.now
@@ -124,13 +143,17 @@ const TicketSchema = new mongoose.Schema({
   }
 });
 
-// Generate ticket number before saving
+// Generate ticket number
 TicketSchema.pre('save', async function(next) {
-  if (!this.number) {
-    const count = await this.constructor.countDocuments();
-    this.number = `TKT-${String(count + 1).padStart(6, '0')}`;
+  if (!this.ticketNumber) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const count = await this.constructor.countDocuments({ createdAt: { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } });
+    this.ticketNumber = `TKT-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
   }
   next();
 });
 
-module.exports = mongoose.model('Ticket', TicketSchema);
+export default mongoose.model('Ticket', TicketSchema);

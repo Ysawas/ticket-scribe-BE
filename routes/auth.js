@@ -1,9 +1,8 @@
-
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { check } = require('express-validator');
-const authController = require('../controllers/authController');
-const auth = require('../middleware/auth');
+import { check } from 'express-validator';
+import * as authController from '../controllers/authController.js';
+import auth from '../middleware/auth.js';  //  <--  ESM import
 
 // @route   POST /api/auth/login
 // @desc    Login user and get token
@@ -11,7 +10,7 @@ const auth = require('../middleware/auth');
 router.post(
   '/login',
   [
-    check('email', 'Please include a valid email').isEmail(),
+    check('username', 'Username is required').notEmpty(),
     check('password', 'Password is required').exists()
   ],
   authController.login
@@ -22,4 +21,4 @@ router.post(
 // @access  Private
 router.get('/me', auth, authController.getCurrentUser);
 
-module.exports = router;
+export default router;

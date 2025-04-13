@@ -1,64 +1,77 @@
+import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
+import { validationResult } from 'express-validator';
 
-const User = require('../models/User');
-const jwt = require('jsonwebtoken');
-const { validationResult } = require('express-validator');
-
-// Login user
-exports.login = async (req, res, next) => {
+export const login = async (req, res, next) => {
+  console.log('AUTH CONTROLLER: login - START');
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('AUTH CONTROLLER: login - Validation errors:', errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password } = req.body;
+    const { username, password } = req.body;
+    console.log(`AUTH CONTROLLER: login - Attempting login for username: ${username}`);
 
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    const user = await User.findOne({ username }).populate('departmentId', 'name');
+    if (!user || user.status !== 'active') {
+      console.log('AUTH CONTROLLER: login - Invalid username or user not active');
+      return res.status(401).json({ error: 'Invalid username or user is not active' });
     }
 
-    // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.log('AUTH CONTROLLER: login - Invalid password');
+      return res.status(401).json({ error: 'Invalid password' });
     }
 
-    // Create token payload
     const payload = {
       user: {
         id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
+        username: user.username,
+        role: user.role,
+        department: user.departmentId,
+        firstName: user.firstName,
+        lastName: user.lastName
       }
     };
 
-    // Sign and return JWT
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
       { expiresIn: '24h' },
       (err, token) => {
-        if (err) throw err;
+        if (err) {
+          console.error('AUTH CONTROLLER: login - JWT signing error:', err);
+          return next(err);
+        }
+        console.log('AUTH CONTROLLER: login - Login successful, token:', token);
         res.json({ token });
       }
     );
   } catch (error) {
+    console.error('AUTH CONTROLLER: login - ERROR:', error);
     next(error);
+  } finally {
+    console.log('AUTH CONTROLLER: login - END');
   }
 };
 
-// Get current user profile
-exports.getCurrentUser = async (req, res, next) => {
+export const getCurrentUser = async (req, res, next) => {
+  console.log('AUTH CONTROLLER: getCurrentUser - START');
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user.id).select('-password').populate('departmentId', 'name');
     if (!user) {
+      console.log('AUTH CONTROLLER: getCurrentUser - User not found');
       return res.status(404).json({ error: 'User not found' });
     }
+    console.log('AUTH CONTROLLER: getCurrentUser - User found:', user);
     res.json(user);
   } catch (error) {
+    console.error('AUTH CONTROLLER: getCurrentUser - ERROR:', error);
     next(error);
+  } finally {
+    console.log('AUTH CONTROLLER: getCurrentUser - END');
   }
 };

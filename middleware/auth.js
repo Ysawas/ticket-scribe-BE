@@ -1,7 +1,7 @@
+// middleware/auth.js
+import jwt from 'jsonwebtoken';  //  ESM
 
-const jwt = require('jsonwebtoken');
-
-module.exports = (req, res, next) => {
+export default (req, res, next) => {  //  ESM
   // Get token from header
   const token = req.header('x-auth-token');
 

@@ -1,3 +1,9 @@
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Custom error handler
@@ -8,8 +14,8 @@
  */
 const errorHandler = (err, req, res, next) => {
   // Log error for server-side debugging
-  console.error(err.stack);
-  
+  console.error(err.stack); // Log the full error stack!
+
   // Mongoose validation error
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors).map(val => val.message);
@@ -18,23 +24,25 @@ const errorHandler = (err, req, res, next) => {
       details: messages
     });
   }
-  
+
   // Mongoose duplicate key error
   if (err.code === 11000) {
+    let field = Object.keys(err.keyValue)[0];
+    let value = err.keyValue[field];
     return res.status(400).json({
       error: 'Duplicate Key Error',
-      details: 'A record with that value already exists'
+      details: `A record with that ${field} "${value}" already exists.`
     });
   }
-  
+
   // Mongoose cast error (invalid ID)
   if (err.name === 'CastError') {
     return res.status(400).json({
       error: 'Invalid ID',
-      details: 'Resource not found'
+      details: `Resource not found with id: ${err.value}`
     });
   }
-  
+
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
@@ -42,7 +50,7 @@ const errorHandler = (err, req, res, next) => {
       details: 'Authorization failed'
     });
   }
-  
+
   // JWT expiration error
   if (err.name === 'TokenExpiredError') {
     return res.status(401).json({
@@ -50,7 +58,7 @@ const errorHandler = (err, req, res, next) => {
       details: 'Please log in again'
     });
   }
-  
+
   // Multer file upload error
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({
@@ -58,7 +66,7 @@ const errorHandler = (err, req, res, next) => {
       details: 'File size must be less than 10MB'
     });
   }
-  
+
   // Default server error
   return res.status(500).json({
     error: 'Server Error',
@@ -66,4 +74,4 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = errorHandler;
+export default errorHandler;

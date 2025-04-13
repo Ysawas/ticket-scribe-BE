@@ -1,10 +1,9 @@
-
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { check } = require('express-validator');
-const ticketController = require('../controllers/ticketController');
-const auth = require('../middleware/auth');
-const upload = require('../middleware/upload');
+import { check } from 'express-validator';
+import * as ticketController from '../controllers/ticketController.js';
+import auth from '../middleware/auth.js';
+import upload from '../middleware/upload.js';
 
 // @route   GET /api/tickets
 // @desc    Get all tickets
@@ -34,9 +33,11 @@ router.post(
   [
     auth,
     check('title', 'Title is required').notEmpty(),
-    check('description', 'Description is required').notEmpty(),
-    check('createdById', 'Creator ID is required').notEmpty(),
-    check('priority', 'Priority must be low, medium, or high').optional().isIn(['low', 'medium', 'high'])
+    check('description', 'Description is required').notEmpty().isLength({ min: 10, max: 500 }),
+    check('authorId', 'Author ID is required').notEmpty(),
+    check('departmentId', 'Department ID is required').notEmpty(),
+    check('topicId', 'Topic ID is required').notEmpty(),
+    check('priority', 'Priority must be low, medium, high, or urgent').optional().isIn(['low', 'medium', 'high', 'urgent'])
   ],
   ticketController.createTicket
 );
@@ -48,11 +49,13 @@ router.post(
   '/with-attachments',
   [
     auth,
-    upload.array('attachments', 5),
+    upload.array('attachments', 3), // Max 3 attachments
     check('title', 'Title is required').notEmpty(),
-    check('description', 'Description is required').notEmpty(),
-    check('createdById', 'Creator ID is required').notEmpty(),
-    check('priority', 'Priority must be low, medium, or high').optional().isIn(['low', 'medium', 'high'])
+    check('description', 'Description is required').notEmpty().isLength({ min: 10, max: 500 }),
+    check('authorId', 'Author ID is required').notEmpty(),
+    check('departmentId', 'Department ID is required').notEmpty(),
+    check('topicId', 'Topic ID is required').notEmpty(),
+    check('priority', 'Priority must be low, medium, high, or urgent').optional().isIn(['low', 'medium', 'high', 'urgent'])
   ],
   ticketController.createTicketWithAttachments
 );
@@ -65,9 +68,14 @@ router.patch(
   [
     auth,
     check('title', 'Title is required').optional().notEmpty(),
-    check('description', 'Description is required').optional().notEmpty(),
-    check('status', 'Status must be open, pending, or closed').optional().isIn(['open', 'pending', 'closed']),
-    check('priority', 'Priority must be low, medium, or high').optional().isIn(['low', 'medium', 'high'])
+    check('description', 'Description is required').optional().notEmpty().isLength({ min: 10, max: 500 }),
+    check('status', 'Status must be open, in progress, resolved, or closed').optional().isIn(['open', 'in progress', 'resolved', 'closed']),
+    check('progress', 'Progress must be between 0 and 100').optional().isInt({ min: 0, max: 100 }),
+    check('priority', 'Priority must be low, medium, high, or urgent').optional().isIn(['low', 'medium', 'high', 'urgent']),
+    check('assignedToId', 'Assigned To ID is required').optional().notEmpty(),
+    check('departmentId', 'Department ID is required').optional().notEmpty(),
+    check('topicId', 'Topic ID is required').optional().notEmpty(),
+    check('escalatedToDepartmentId', 'Escalated Department ID is required').optional().notEmpty()
   ],
   ticketController.updateTicket
 );
@@ -84,40 +92,4 @@ router.post(
   ticketController.addComment
 );
 
-// @route   PATCH /api/tickets/:id/status
-// @desc    Update a ticket status
-// @access  Private
-router.patch(
-  '/:id/status',
-  [
-    auth,
-    check('status', 'Status must be open, pending, or closed').isIn(['open', 'pending', 'closed'])
-  ],
-  ticketController.updateStatus
-);
-
-// @route   PATCH /api/tickets/:id/priority
-// @desc    Update a ticket priority
-// @access  Private
-router.patch(
-  '/:id/priority',
-  [
-    auth,
-    check('priority', 'Priority must be low, medium, or high').isIn(['low', 'medium', 'high'])
-  ],
-  ticketController.updatePriority
-);
-
-// @route   PATCH /api/tickets/:id/assign
-// @desc    Assign a ticket to a user
-// @access  Private
-router.patch(
-  '/:id/assign',
-  [
-    auth,
-    check('assignedToId', 'User ID is required').exists()
-  ],
-  ticketController.assignTicket
-);
-
-module.exports = router;
+export default router;
