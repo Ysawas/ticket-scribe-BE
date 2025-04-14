@@ -35,7 +35,8 @@ const UserSchema = new mongoose.Schema({
   },
   department: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Department'
+    ref: 'Department',
+    required: true
   },
   createdAt: {
     type: Date,
@@ -44,6 +45,11 @@ const UserSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  status: {  //  Add the status field
+    type: String,
+    enum: ['active', 'inactive', 'pending'],
+    default: 'pending'
   }
 });
 

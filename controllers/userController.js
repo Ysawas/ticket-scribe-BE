@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import sendEmail from '../utils/emailService.js';
-import Department from '../models/Department.js'; //  Import Department model
+import Department from '../models/Department.js'; //  Import Department model
 
 export const getAllUsers = async (req, res, next) => {
   console.log('USER CONTROLLER: getAllUsers - START');
@@ -66,7 +66,7 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({ error: 'User with this email or username already exists' });
     }
 
-    // Create user
+    // Create user object
     user = new User({
       firstName,
       lastName,
@@ -79,9 +79,29 @@ export const createUser = async (req, res, next) => {
       email
     });
 
+    // Validation *before* saving
+    try {
+      await user.validate(); // Manually trigger validation
+    } catch (validationError) {
+      if (validationError.name === 'ValidationError') {
+        const statusError = validationError.errors.status;
+        const departmentError = validationError.errors.department;
+
+        if (statusError) {
+          return res.status(400).json({ error: 'Status is required', details: statusError.message });
+        }
+        if (departmentError) {
+          return res.status(400).json({ error: 'Department is required', details: departmentError.message });
+        }
+      }
+      // If it's not a validation error, re-throw it
+      throw validationError;
+    }
+
+
     await user.save();
 
-    //  Add user to department's members array
+    //  Add user to department's members array
     if (departmentId) {
       console.log(`USER CONTROLLER: createUser - Adding user to department with ID: ${departmentId}`);
       try {
@@ -108,8 +128,8 @@ export const createUser = async (req, res, next) => {
       console.log('USER CONTROLLER: createUser - Welcome email sent to:', email);
     } catch (emailError) {
       console.error('USER CONTROLLER: createUser - Error sending welcome email:', emailError);
-      //  IMPORTANT: Decide how to handle email sending errors.
-      //  You might choose to log the error but still send the user a success response.
+      //  IMPORTANT: Decide how to handle email sending errors.
+      //  You might choose to log the error but still send the user a success response.
     }
 
     // Return user without password
@@ -149,7 +169,7 @@ export const updateUser = async (req, res, next) => {
     if (email) userFields.email = email;
     userFields.updatedAt = Date.now();
 
-    //  Handle department change
+    //  Handle department change
     if (departmentId) {
       console.log(`USER CONTROLLER: updateUser - Changing user ${req.params.id} to department ${departmentId}`);
       const newDepartment = await Department.findById(departmentId);
@@ -170,24 +190,43 @@ export const updateUser = async (req, res, next) => {
         }
       } else {
         console.warn(`USER CONTROLLER: updateUser - Department with ID ${departmentId} not found, user's department not updated.`);
-        //  Decide how to handle this
+        //  Decide how to handle this
       }
     }
 
-    // Update user
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { $set: userFields },
-      { new: true }
-    ).select('-password').populate('department', 'name');
+    let user;
+    try {
+      // Update user
+      user = await User.findByIdAndUpdate(
+        req.params.id,
+        { $set: userFields },
+        { new: true, runValidators: true } //  Important: runValidators
+      ).select('-password').populate('department', 'name');
 
-    if (!user) {
-      console.log(`USER CONTROLLER: updateUser - User not found with ID: ${req.params.id}`);
-      return res.status(404).json({ error: 'User not found' });
+      if (!user) {
+        console.log(`USER CONTROLLER: updateUser - User not found with ID: ${req.params.id}`);
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log('USER CONTROLLER: updateUser - User updated:', user);
+      res.json(user);
+
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        const statusError = error.errors.status;
+        const departmentError = error.errors.department;
+
+        if (statusError) {
+          return res.status(400).json({ error: 'Status is required', details: statusError.message });
+        }
+        if (departmentError) {
+          return res.status(400).json({ error: 'Department is required', details: departmentError.message });
+        }
+      }
+      throw error; // Re-throw other errors
     }
 
-    console.log('USER CONTROLLER: updateUser - User updated:', user);
-    res.json(user);
+
   } catch (error) {
     console.error('USER CONTROLLER: updateUser - ERROR:', error);
     next(error);
@@ -206,7 +245,7 @@ export const deleteUser = async (req, res, next) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    //  Remove user from department's members array
+    //  Remove user from department's members array
     if (user.department) {
       const department = await Department.findById(user.department);
       if (department) {
@@ -214,7 +253,7 @@ export const deleteUser = async (req, res, next) => {
         await department.save();
       } else {
         console.warn(`USER CONTROLLER: deleteUser - Department with ID ${user.department} not found, user not removed from department members.`);
-        //  Decide how to handle this (maybe don't throw an error)
+        //  Decide how to handle this (maybe don't throw an error)
       }
     }
 

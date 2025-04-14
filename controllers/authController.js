@@ -15,7 +15,7 @@ export const login = async (req, res, next) => {
     const { username, password } = req.body;
     console.log(`AUTH CONTROLLER: login - Attempting login for username: ${username}`);
 
-    const user = await User.findOne({ username }).populate('departmentId', 'name');
+    const user = await User.findOne({ username }).populate('department', 'name'); // Corrected
     if (!user || user.status !== 'active') {
       console.log('AUTH CONTROLLER: login - Invalid username or user not active');
       return res.status(401).json({ error: 'Invalid username or user is not active' });
@@ -32,7 +32,7 @@ export const login = async (req, res, next) => {
         id: user.id,
         username: user.username,
         role: user.role,
-        department: user.departmentId,
+        department: user.department,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email // Include email in the payload
@@ -63,7 +63,7 @@ export const login = async (req, res, next) => {
 export const getCurrentUser = async (req, res, next) => {
   console.log('AUTH CONTROLLER: getCurrentUser - START');
   try {
-    const user = await User.findById(req.user.id).select('-password').populate('departmentId', 'name');
+    const user = await User.findById(req.user.id).select('-password').populate('department', 'name');
     if (!user) {
       console.log('AUTH CONTROLLER: getCurrentUser - User not found');
       return res.status(404).json({ error: 'User not found' });
