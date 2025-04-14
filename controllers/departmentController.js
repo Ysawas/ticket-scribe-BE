@@ -9,9 +9,10 @@ export const getAllDepartments = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const departments = await Department.find()
-      .populate('supervisorId', 'firstName lastName email') // Include email
-      .populate('managerId', 'firstName lastName email') // Include email
-      .populate('parentDepartmentId', 'name')
+      .populate('supervisor', 'firstName lastName email') // Corrected
+      .populate('manager', 'firstName lastName email')    // Corrected
+      .populate('parentDepartment', 'name')
+      .populate('members', 'firstName lastName email')
       .skip(parseInt(skip))
       .limit(parseInt(limit));
     const total = await Department.countDocuments();
@@ -35,9 +36,10 @@ export const getDepartmentById = async (req, res, next) => {
   console.log(`DEPARTMENT CONTROLLER: getDepartmentById - START - ID: ${req.params.id}`);
   try {
     const department = await Department.findById(req.params.id)
-      .populate('supervisorId', 'firstName lastName email') // Include email
-      .populate('managerId', 'firstName lastName email') // Include email
-      .populate('parentDepartmentId', 'name');
+      .populate('supervisor', 'firstName lastName email') // Corrected
+      .populate('manager', 'firstName lastName email')    // Corrected
+      .populate('parentDepartment', 'name')
+      .populate('members', 'firstName lastName email');
 
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: getDepartmentById - Department not found with ID: ${req.params.id}`);
@@ -63,7 +65,7 @@ export const createDepartment = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, code, description, supervisorId, managerId, parentDepartmentId } = req.body;
+    const { name, code, description, supervisor: supervisorId, manager: managerId, parentDepartment: parentDepartmentId } = req.body;
     console.log('DEPARTMENT CONTROLLER: createDepartment - Request body:', req.body);
 
     let department = await Department.findOne({ $or: [{ name }, { code }] });
@@ -76,9 +78,9 @@ export const createDepartment = async (req, res, next) => {
       name,
       code,
       description,
-      supervisorId,
-      managerId,
-      parentDepartmentId
+      supervisor: supervisorId,
+      manager: managerId,
+      parentDepartment: parentDepartmentId
     });
 
     await department.save();
@@ -121,23 +123,27 @@ export const updateDepartment = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, code, description, supervisorId, managerId, parentDepartmentId } = req.body;
+    const { name, code, description, supervisor: supervisorId, manager: managerId, parentDepartment: parentDepartmentId } = req.body;
     console.log('DEPARTMENT CONTROLLER: updateDepartment - Request body:', req.body);
 
     const departmentFields = {};
     if (name) departmentFields.name = name;
     if (code) departmentFields.code = code;
     if (description) departmentFields.description = description;
-    if (supervisorId) departmentFields.supervisorId = supervisorId;
-    if (managerId) departmentFields.managerId = managerId;
-    if (parentDepartmentId) departmentFields.parentDepartmentId = parentDepartmentId;
+    if (supervisorId) departmentFields.supervisor = supervisorId;
+    if (managerId) departmentFields.manager = managerId;
+    if (parentDepartmentId) departmentFields.parentDepartment = parentDepartmentId;
     departmentFields.updatedAt = Date.now();
 
     const department = await Department.findByIdAndUpdate(
       req.params.id,
       { $set: departmentFields },
       { new: true }
-    ).populate('supervisorId', 'firstName lastName email').populate('managerId', 'firstName lastName email').populate('parentDepartmentId', 'name');
+    )
+      .populate('supervisor', 'firstName lastName email')
+      .populate('manager', 'firstName lastName email')
+      .populate('parentDepartment', 'name')
+      .populate('members', 'firstName lastName email');
 
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: updateDepartment - Department not found with ID: ${req.params.id}`);
@@ -145,7 +151,7 @@ export const updateDepartment = async (req, res, next) => {
     }
 
     // Send email notification to supervisor (if changed)
-    if (supervisorId && supervisorId !== department.supervisorId) {
+    if (supervisorId && supervisorId !== department.supervisor) {
       try {
         const newSupervisor = await User.findById(supervisorId);
         if (newSupervisor) {

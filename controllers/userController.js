@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
-import sendEmail from '../utils/emailService.js'; //  Import the email service
+import sendEmail from '../utils/emailService.js';
+import Department from '../models/Department.js'; //  Import Department model
 
 export const getAllUsers = async (req, res, next) => {
   console.log('USER CONTROLLER: getAllUsers - START');
@@ -8,7 +9,7 @@ export const getAllUsers = async (req, res, next) => {
     const { limit = 10, page = 1 } = req.query;
     const skip = (page - 1) * limit;
 
-    const users = await User.find().select('-password').populate('departmentId', 'name').skip(parseInt(skip)).limit(parseInt(limit));
+    const users = await User.find().select('-password').populate('department', 'name').skip(parseInt(skip)).limit(parseInt(limit));
     const total = await User.countDocuments();
 
     console.log(`USER CONTROLLER: getAllUsers - Found ${users.length} users`);
@@ -29,7 +30,7 @@ export const getAllUsers = async (req, res, next) => {
 export const getUserById = async (req, res, next) => {
   console.log(`USER CONTROLLER: getUserById - START - ID: ${req.params.id}`);
   try {
-    const user = await User.findById(req.params.id).select('-password').populate('departmentId', 'name');
+    const user = await User.findById(req.params.id).select('-password').populate('department', 'name');
 
     if (!user) {
       console.log(`USER CONTROLLER: getUserById - User not found with ID: ${req.params.id}`);
@@ -55,7 +56,7 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, password, role, status, departmentId, email } = req.body;
+    const { firstName, lastName, username, birthday, password, role, status, department: departmentId, email } = req.body;
     console.log('USER CONTROLLER: createUser - Request body:', req.body);
 
     // Check if user exists
@@ -74,11 +75,29 @@ export const createUser = async (req, res, next) => {
       password,
       role,
       status,
-      departmentId,
-      email //  Include email in the user object
+      department: departmentId,
+      email
     });
 
     await user.save();
+
+    //  Add user to department's members array
+    if (departmentId) {
+      console.log(`USER CONTROLLER: createUser - Adding user to department with ID: ${departmentId}`);
+      try {
+        const department = await Department.findById(departmentId);
+        if (department) {
+          console.log(`USER CONTROLLER: createUser - Department found:`, department);
+          department.members.push(user._id);
+          await department.save();
+          console.log(`USER CONTROLLER: createUser - Department saved. members:`, department.members);
+        } else {
+          console.warn(`USER CONTROLLER: createUser - Department with ID ${departmentId} NOT found!`);
+        }
+      } catch (error) {
+        console.error(`USER CONTROLLER: createUser - Error updating department:`, error);
+      }
+    }
 
     // Send welcome email
     try {
@@ -116,7 +135,7 @@ export const updateUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, role, status, departmentId, email } = req.body;
+    const { firstName, lastName, username, birthday, role, status, department: departmentId, email } = req.body;
     console.log('USER CONTROLLER: updateUser - Request body:', req.body);
 
     // Build user object
@@ -127,16 +146,40 @@ export const updateUser = async (req, res, next) => {
     if (birthday) userFields.birthday = birthday;
     if (role) userFields.role = role;
     if (status) userFields.status = status;
-    if (departmentId) userFields.departmentId = departmentId;
     if (email) userFields.email = email;
     userFields.updatedAt = Date.now();
+
+    //  Handle department change
+    if (departmentId) {
+      console.log(`USER CONTROLLER: updateUser - Changing user ${req.params.id} to department ${departmentId}`);
+      const newDepartment = await Department.findById(departmentId);
+      const oldDepartment = await User.findById(req.params.id).populate('department');
+
+      if (newDepartment) {
+        console.log(`USER CONTROLLER: updateUser - New department found:`, newDepartment);
+        userFields.department = departmentId;
+        newDepartment.members.push(req.params.id);
+        await newDepartment.save();
+        console.log(`USER CONTROLLER: updateUser - User added to new department. Members:`, newDepartment.members);
+
+        if (oldDepartment && oldDepartment.department) {
+          console.log(`USER CONTROLLER: updateUser - Old department found:`, oldDepartment.department);
+          oldDepartment.department.members.pull(req.params.id);
+          await oldDepartment.department.save();
+          console.log(`USER CONTROLLER: updateUser - User removed from old department. Members:`, oldDepartment.department.members);
+        }
+      } else {
+        console.warn(`USER CONTROLLER: updateUser - Department with ID ${departmentId} not found, user's department not updated.`);
+        //  Decide how to handle this
+      }
+    }
 
     // Update user
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { $set: userFields },
       { new: true }
-    ).select('-password').populate('departmentId', 'name');
+    ).select('-password').populate('department', 'name');
 
     if (!user) {
       console.log(`USER CONTROLLER: updateUser - User not found with ID: ${req.params.id}`);
@@ -161,6 +204,18 @@ export const deleteUser = async (req, res, next) => {
     if (!user) {
       console.log(`USER CONTROLLER: deleteUser - User not found with ID: ${req.params.id}`);
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    //  Remove user from department's members array
+    if (user.department) {
+      const department = await Department.findById(user.department);
+      if (department) {
+        department.members.pull(req.params.id);
+        await department.save();
+      } else {
+        console.warn(`USER CONTROLLER: deleteUser - Department with ID ${user.department} not found, user not removed from department members.`);
+        //  Decide how to handle this (maybe don't throw an error)
+      }
     }
 
     await User.findByIdAndRemove(req.params.id);

@@ -1,4 +1,3 @@
-// models/Department.js
 import mongoose from 'mongoose';
 
 const DepartmentSchema = new mongoose.Schema({
@@ -18,7 +17,7 @@ const DepartmentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  members: [{
+  members: [{  //  New field to store user references
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
