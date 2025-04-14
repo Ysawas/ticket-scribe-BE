@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import { validationResult } from 'express-validator';
+import sendEmail from '../utils/emailService.js'; //  Import the email service
 
 export const login = async (req, res, next) => {
   console.log('AUTH CONTROLLER: login - START');
@@ -33,7 +34,8 @@ export const login = async (req, res, next) => {
         role: user.role,
         department: user.departmentId,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        email: user.email // Include email in the payload
       }
     };
 

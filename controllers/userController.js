@@ -1,12 +1,23 @@
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
+import sendEmail from '../utils/emailService.js'; //  Import the email service
 
 export const getAllUsers = async (req, res, next) => {
   console.log('USER CONTROLLER: getAllUsers - START');
   try {
-    const users = await User.find().select('-password').populate('departmentId', 'name');
+    const { limit = 10, page = 1 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const users = await User.find().select('-password').populate('departmentId', 'name').skip(parseInt(skip)).limit(parseInt(limit));
+    const total = await User.countDocuments();
+
     console.log(`USER CONTROLLER: getAllUsers - Found ${users.length} users`);
-    res.json(users);
+    res.json({
+      users,
+      total,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (error) {
     console.error('USER CONTROLLER: getAllUsers - ERROR:', error);
     next(error);
@@ -44,11 +55,11 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, password, role, status, departmentId } = req.body;
+    const { firstName, lastName, username, birthday, password, role, status, departmentId, email } = req.body;
     console.log('USER CONTROLLER: createUser - Request body:', req.body);
 
     // Check if user exists
-    let user = await User.findOne({ $or: [{ email: req.body.email }, { username }] });
+    let user = await User.findOne({ $or: [{ email }, { username }] });
     if (user) {
       console.log('USER CONTROLLER: createUser - User with this email or username already exists');
       return res.status(400).json({ error: 'User with this email or username already exists' });
@@ -63,10 +74,24 @@ export const createUser = async (req, res, next) => {
       password,
       role,
       status,
-      departmentId
+      departmentId,
+      email //  Include email in the user object
     });
 
     await user.save();
+
+    // Send welcome email
+    try {
+      await sendEmail(email, 'Welcome to Ticket Scribe!', `
+        <h1>Welcome, ${firstName} ${lastName}!</h1>
+        <p>Thank you for registering with Ticket Scribe. Your username is: ${username}</p>
+      `);
+      console.log('USER CONTROLLER: createUser - Welcome email sent to:', email);
+    } catch (emailError) {
+      console.error('USER CONTROLLER: createUser - Error sending welcome email:', emailError);
+      //  IMPORTANT: Decide how to handle email sending errors.
+      //  You might choose to log the error but still send the user a success response.
+    }
 
     // Return user without password
     const userResponse = user.toObject();
@@ -91,7 +116,7 @@ export const updateUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, role, status, departmentId } = req.body;
+    const { firstName, lastName, username, birthday, role, status, departmentId, email } = req.body;
     console.log('USER CONTROLLER: updateUser - Request body:', req.body);
 
     // Build user object
@@ -103,6 +128,7 @@ export const updateUser = async (req, res, next) => {
     if (role) userFields.role = role;
     if (status) userFields.status = status;
     if (departmentId) userFields.departmentId = departmentId;
+    if (email) userFields.email = email;
     userFields.updatedAt = Date.now();
 
     // Update user

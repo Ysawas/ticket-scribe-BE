@@ -1,5 +1,7 @@
 import Topic from '../models/Topic.js';
 import { validationResult } from 'express-validator';
+import sendEmail from '../utils/emailService.js';
+import Department from '../models/Department.js'; // Import Department model
 
 export const getAllTopics = async (req, res, next) => {
   console.log('TOPIC CONTROLLER: getAllTopics - START');
@@ -64,6 +66,25 @@ export const createTopic = async (req, res, next) => {
 
     await topic.save();
 
+    //  Example: Send email to department manager when a new topic is created.
+    try {
+      const department = await Department.findById(departmentId).populate('managerId', 'email');
+      if (department && department.managerId && department.managerId.email) {
+        await sendEmail(department.managerId.email, `New Topic Created: ${category} - ${subcategory}`, `
+          <h1>A new topic has been created in your department:</h1>
+          <p>Category: ${category}</p>
+          <p>Subcategory: ${subcategory}</p>
+          <p>Description: ${description}</p>
+        `);
+        console.log(`TOPIC CONTROLLER: createTopic - Email sent to department manager: ${department.managerId.email}`);
+      } else {
+        console.warn(`TOPIC CONTROLLER: createTopic - Department or manager not found, email not sent.`);
+      }
+    } catch (emailError) {
+      console.error('TOPIC CONTROLLER: createTopic - Error sending email:', emailError);
+      // Handle email sending error (log, queue, etc.) - decide if you want to throw or continue
+    }
+
     console.log('TOPIC CONTROLLER: createTopic - Topic created:', topic);
     res.status(201).json(topic);
   } catch (error) {
@@ -106,6 +127,26 @@ export const updateTopic = async (req, res, next) => {
 
     console.log('TOPIC CONTROLLER: updateTopic - Topic updated:', topic);
     res.json(topic);
+
+    // Example: Send email on topic update
+    try {
+      const department = await Department.findById(topic.departmentId).populate('managerId', 'email');
+      if (department && department.managerId && department.managerId.email) {
+        await sendEmail(department.managerId.email, `Topic Updated: ${topic.category} - ${topic.subcategory}`, `
+          <h1>A topic has been updated in your department:</h1>
+          <p>Category: ${topic.category}</p>
+          <p>Subcategory: ${topic.subcategory}</p>
+          <p>Description: ${topic.description}</p>
+        `);
+        console.log(`TOPIC CONTROLLER: updateTopic - Email sent to department manager: ${department.managerId.email}`);
+      } else {
+        console.warn(`TOPIC CONTROLLER: updateTopic - Department or manager not found, email not sent.`);
+      }
+    } catch (emailError) {
+      console.error('TOPIC CONTROLLER: updateTopic - Error sending email:', emailError);
+      // Handle email sending error
+    }
+
   } catch (error) {
     console.error('TOPIC CONTROLLER: updateTopic - ERROR:', error);
     next(error);

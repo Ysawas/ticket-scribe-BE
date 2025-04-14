@@ -1,5 +1,6 @@
 import Department from '../models/Department.js';
 import { validationResult } from 'express-validator';
+import sendEmail from '../utils/emailService.js'; // Import email service
 
 export const getAllDepartments = async (req, res, next) => {
   console.log('DEPARTMENT CONTROLLER: getAllDepartments - START');
@@ -8,8 +9,8 @@ export const getAllDepartments = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const departments = await Department.find()
-      .populate('supervisorId', 'firstName lastName')
-      .populate('managerId', 'firstName lastName')
+      .populate('supervisorId', 'firstName lastName email') // Include email
+      .populate('managerId', 'firstName lastName email') // Include email
       .populate('parentDepartmentId', 'name')
       .skip(parseInt(skip))
       .limit(parseInt(limit));
@@ -34,8 +35,8 @@ export const getDepartmentById = async (req, res, next) => {
   console.log(`DEPARTMENT CONTROLLER: getDepartmentById - START - ID: ${req.params.id}`);
   try {
     const department = await Department.findById(req.params.id)
-      .populate('supervisorId', 'firstName lastName')
-      .populate('managerId', 'firstName lastName')
+      .populate('supervisorId', 'firstName lastName email') // Include email
+      .populate('managerId', 'firstName lastName email') // Include email
       .populate('parentDepartmentId', 'name');
 
     if (!department) {
@@ -82,6 +83,25 @@ export const createDepartment = async (req, res, next) => {
 
     await department.save();
 
+    // Send email notification to supervisor (if provided)
+    if (supervisorId) {
+      try {
+        const supervisor = await User.findById(supervisorId);
+        if (supervisor) {
+          await sendEmail(supervisor.email, 'New Department Created', `
+            <h1>A new department has been created: ${name}</h1>
+            <p>You have been assigned as the supervisor.</p>
+          `);
+          console.log(`DEPARTMENT CONTROLLER: createDepartment - Email sent to supervisor: ${supervisor.email}`);
+        } else {
+          console.warn(`DEPARTMENT CONTROLLER: createDepartment - Supervisor with ID ${supervisorId} not found, email not sent.`);
+        }
+      } catch (emailError) {
+        console.error('DEPARTMENT CONTROLLER: createDepartment - Error sending email to supervisor:', emailError);
+        // Handle email sending error (log, etc.) - decide if you want to throw or continue
+      }
+    }
+
     console.log('DEPARTMENT CONTROLLER: createDepartment - Department created:', department);
     res.status(201).json(department);
   } catch (error) {
@@ -117,11 +137,29 @@ export const updateDepartment = async (req, res, next) => {
       req.params.id,
       { $set: departmentFields },
       { new: true }
-    ).populate('supervisorId', 'firstName lastName').populate('managerId', 'firstName lastName').populate('parentDepartmentId', 'name');
+    ).populate('supervisorId', 'firstName lastName email').populate('managerId', 'firstName lastName email').populate('parentDepartmentId', 'name');
 
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: updateDepartment - Department not found with ID: ${req.params.id}`);
       return res.status(404).json({ error: 'Department not found' });
+    }
+
+    // Send email notification to supervisor (if changed)
+    if (supervisorId && supervisorId !== department.supervisorId) {
+      try {
+        const newSupervisor = await User.findById(supervisorId);
+        if (newSupervisor) {
+          await sendEmail(newSupervisor.email, `Department ${department.name} - Supervisor Changed`, `
+            <h1>You have been assigned as the supervisor of ${department.name}</h1>
+          `);
+          console.log(`DEPARTMENT CONTROLLER: updateDepartment - Email sent to new supervisor: ${newSupervisor.email}`);
+        } else {
+          console.warn(`DEPARTMENT CONTROLLER: updateDepartment - New supervisor with ID ${supervisorId} not found, email not sent.`);
+        }
+      } catch (emailError) {
+        console.error('DEPARTMENT CONTROLLER: updateDepartment - Error sending email to new supervisor:', emailError);
+        // Handle email sending error
+      }
     }
 
     console.log('DEPARTMENT CONTROLLER: updateDepartment - Department updated:', department);

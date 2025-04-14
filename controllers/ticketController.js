@@ -1,6 +1,7 @@
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
+import sendEmail from '../utils/emailService.js';
 
 export const getAllTickets = async (req, res, next) => {
   console.log('TICKET CONTROLLER: getAllTickets - START');
@@ -9,8 +10,8 @@ export const getAllTickets = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const tickets = await Ticket.find()
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email') // Include email!
+      .populate('assignedToId', 'firstName lastName email') // Include email!
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory')
       .skip(parseInt(skip))
@@ -37,8 +38,8 @@ export const getTicketById = async (req, res, next) => {
   console.log(`TICKET CONTROLLER: getTicketById - START - ID: ${req.params.id}`);
   try {
     const ticket = await Ticket.findById(req.params.id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory')
       .populate('comments.userId', 'firstName lastName')
@@ -88,11 +89,41 @@ export const createTicket = async (req, res, next) => {
     await ticket.save();
 
     const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory');
-    console.log('TICKET CONTROLLER: createTicket - Ticket created:', populatedTicket);
+
+    // Send email to author
+    try {
+      await sendEmail(populatedTicket.authorId.email, 'New Ticket Created', `
+        <h1>A new ticket has been created</h1>
+        <p>Title: ${title}</p>
+        <p>Description: ${description}</p>
+        <p>You can view it here: <a href="your_app_url/tickets/${populatedTicket._id}">View Ticket</a></p>
+      `);
+      console.log('TICKET CONTROLLER: createTicket - Email sent to author:', populatedTicket.authorId.email);
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: createTicket - Error sending email to author:', emailError);
+      // Handle error (log, etc.)
+    }
+
+    // Send email to assigned user (if assigned)
+    if (populatedTicket.assignedToId) {
+      try {
+        await sendEmail(populatedTicket.assignedToId.email, 'New Ticket Assigned to You', `
+          <h1>A new ticket has been assigned to you</h1>
+          <p>Title: ${title}</p>
+          <p>Description: ${description}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${populatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log('TICKET CONTROLLER: createTicket - Email sent to assigned user:', populatedTicket.assignedToId.email);
+      } catch (emailError) {
+        console.error('TICKET CONTROLLER: createTicket - Error sending email to assigned user:', emailError);
+        // Handle error
+      }
+    }
+
     res.status(201).json(populatedTicket);
   } catch (error) {
     console.error('TICKET CONTROLLER: createTicket - ERROR:', error);
@@ -147,11 +178,41 @@ export const createTicketWithAttachments = async (req, res, next) => {
     await ticket.save();
 
     const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory');
-    console.log('TICKET CONTROLLER: createTicketWithAttachments - Ticket created with attachments:', populatedTicket);
+
+    // Send email to author
+    try {
+      await sendEmail(populatedTicket.authorId.email, 'New Ticket Created (with Attachments)', `
+        <h1>A new ticket has been created (with attachments)</h1>
+        <p>Title: ${title}</p>
+        <p>Description: ${description}</p>
+        <p>You can view it here: <a href="your_app_url/tickets/${populatedTicket._id}">View Ticket</a></p>
+      `);
+      console.log('TICKET CONTROLLER: createTicketWithAttachments - Email sent to author:', populatedTicket.authorId.email);
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: createTicketWithAttachments - Error sending email to author:', emailError);
+      // Handle error
+    }
+
+    // Send email to assigned user (if assigned)
+    if (populatedTicket.assignedToId) {
+      try {
+        await sendEmail(populatedTicket.assignedToId.email, 'New Ticket Assigned to You (with Attachments)', `
+          <h1>A new ticket has been assigned to you (with attachments)</h1>
+          <p>Title: ${title}</p>
+          <p>Description: ${description}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${populatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log('TICKET CONTROLLER: createTicketWithAttachments - Email sent to assigned user:', populatedTicket.assignedToId.email);
+      } catch (emailError) {
+        console.error('TICKET CONTROLLER: createTicketWithAttachments - Error sending email to assigned user:', emailError);
+        // Handle error
+      }
+    }
+
     res.status(201).json(populatedTicket);
   } catch (error) {
     console.error('TICKET CONTROLLER: createTicketWithAttachments - ERROR:', error);
@@ -174,7 +235,9 @@ export const updateTicket = async (req, res, next) => {
     const userId = req.user.id;
     console.log('TICKET CONTROLLER: updateTicket - Request body:', req.body);
 
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findById(req.params.id)
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email');
 
     if (!ticket) {
       console.log(`TICKET CONTROLLER: updateTicket - Ticket not found with ID: ${req.params.id}`);
@@ -183,6 +246,8 @@ export const updateTicket = async (req, res, next) => {
 
     const ticketFields = {};
     const historyEntries = [];
+    let statusChanged = false;
+    let assigneeChanged = false;
 
     if (title && title !== ticket.title) {
       ticketFields.title = title;
@@ -212,6 +277,7 @@ export const updateTicket = async (req, res, next) => {
         newValue: status,
         userId
       });
+      statusChanged = true;
     }
 
     if (priority && priority !== ticket.priority) {
@@ -232,6 +298,7 @@ export const updateTicket = async (req, res, next) => {
         newValue: assignedToId,
         userId
       });
+      assigneeChanged = true;
     }
 
     if (departmentId && departmentId !== (ticket.departmentId ? ticket.departmentId.toString() : null)) {
@@ -275,8 +342,8 @@ export const updateTicket = async (req, res, next) => {
       ticketFields,
       { new: true }
     )
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory')
       .populate('comments.userId', 'firstName lastName')
@@ -285,6 +352,38 @@ export const updateTicket = async (req, res, next) => {
     if (!updatedTicket) {
       console.log(`TICKET CONTROLLER: updateTicket - Ticket update failed for ID: ${req.params.id}`);
       return res.status(500).json({ error: 'Ticket update failed' });
+    }
+
+    //  Send email notifications based on changes
+    if (statusChanged) {
+      try {
+        await sendEmail(ticket.authorId.email, `Ticket Status Updated: ${ticket.title}`, `
+          <h1>The status of your ticket has been updated:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>New Status: ${status}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updateTicket - Status update notification sent to author: ${ticket.authorId.email}`);
+      } catch (emailError) {
+        console.error('TICKET CONTROLLER: updateTicket - Error sending status update email to author:', emailError);
+        // Handle error
+      }
+    }
+
+    if (assigneeChanged) {
+      try {
+        if (updatedTicket.assignedToId) {
+          await sendEmail(updatedTicket.assignedToId.email, `Ticket Assigned To You: ${updatedTicket.title}`, `
+            <h1>A ticket has been assigned to you:</h1>
+            <p>Title: ${updatedTicket.title}</p>
+            <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+          `);
+          console.log(`TICKET CONTROLLER: updateTicket - Assignee update email sent to new assignee: ${updatedTicket.assignedToId.email}`);
+        }
+      } catch (emailError) {
+        console.error('TICKET CONTROLLER: updateTicket - Error sending assignee update email to new assignee:', emailError);
+        // Handle error
+      }
     }
 
     console.log('TICKET CONTROLLER: updateTicket - Ticket updated:', updatedTicket);
@@ -310,7 +409,9 @@ export const addComment = async (req, res, next) => {
     const userId = req.user.id;
     console.log('TICKET CONTROLLER: addComment - Request body:', req.body);
 
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findById(req.params.id)
+      .populate('authorId', 'email')
+      .populate('assignedToId', 'email');
 
     if (!ticket) {
       console.log(`TICKET CONTROLLER: addComment - Ticket not found with ID: ${req.params.id}`);
@@ -336,11 +437,36 @@ export const addComment = async (req, res, next) => {
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(req.params.id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'category subcategory')
       .populate('comments.userId', 'firstName lastName');
+
+    // Send email notifications
+    try {
+      if (ticket.authorId && ticket.authorId.email) {
+        await sendEmail(ticket.authorId.email, `New Comment on Ticket: ${ticket.title}`, `
+          <h1>A new comment has been added to your ticket:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>Comment: ${content}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: addComment - Comment notification sent to author: ${ticket.authorId.email}`);
+      }
+      if (ticket.assignedToId && ticket.assignedToId.email && ticket.assignedToId.toString() !== req.user.id) {
+        await sendEmail(ticket.assignedToId.email, `New Comment on Ticket: ${ticket.title}`, `
+          <h1>A new comment has been added to the ticket assigned to you:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>Comment: ${content}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: addComment - Comment notification sent to assignee: ${ticket.assignedToId.email}`);
+      }
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: addComment - Error sending comment notification:', emailError);
+      // Handle error
+    }
 
     console.log('TICKET CONTROLLER: addComment - Comment added to ticket:', updatedTicket);
     res.json(updatedTicket);
@@ -365,7 +491,9 @@ export const updateStatus = async (req, res, next) => {
     const userId = req.user.id;
     console.log('TICKET CONTROLLER: updateStatus - Request body:', req.body);
 
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findById(req.params.id)
+      .populate('authorId', 'email')
+      .populate('assignedToId', 'email');
 
     if (!ticket) {
       console.log(`TICKET CONTROLLER: updateStatus - Ticket not found with ID: ${req.params.id}`);
@@ -387,10 +515,35 @@ export const updateStatus = async (req, res, next) => {
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(req.params.id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'name');
+
+    // Send email notifications
+    try {
+      if (ticket.authorId && ticket.authorId.email) {
+        await sendEmail(ticket.authorId.email, `Ticket Status Updated: ${ticket.title}`, `
+          <h1>The status of your ticket has been updated:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>New Status: ${status}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updateStatus - Status update notification sent to author: ${ticket.authorId.email}`);
+      }
+      if (ticket.assignedToId && ticket.assignedToId.email) {
+        await sendEmail(ticket.assignedToId.email, `Ticket Status Updated: ${ticket.title}`, `
+          <h1>The status of the ticket assigned to you has been updated:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>New Status: ${status}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updateStatus - Status update notification sent to assignee: ${ticket.assignedToId.email}`);
+      }
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: updateStatus - Error sending status update notification:', emailError);
+      // Handle error
+    }
 
     console.log('TICKET CONTROLLER: updateStatus - Ticket status updated:', updatedTicket);
     res.json(updatedTicket);
@@ -415,7 +568,9 @@ export const updatePriority = async (req, res, next) => {
     const userId = req.user.id;
     console.log('TICKET CONTROLLER: updatePriority - Request body:', req.body);
 
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findById(req.params.id)
+      .populate('authorId', 'email')
+      .populate('assignedToId', 'email');
 
     if (!ticket) {
       console.log(`TICKET CONTROLLER: updatePriority - Ticket not found with ID: ${req.params.id}`);
@@ -437,10 +592,35 @@ export const updatePriority = async (req, res, next) => {
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(req.params.id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'name');
+
+    // Send email notifications
+    try {
+      if (ticket.authorId && ticket.authorId.email) {
+        await sendEmail(ticket.authorId.email, `Ticket Priority Updated: ${ticket.title}`, `
+          <h1>The priority of your ticket has been updated:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>New Priority: ${priority}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updatePriority - Priority update notification sent to author: ${ticket.authorId.email}`);
+      }
+      if (ticket.assignedToId && ticket.assignedToId.email) {
+        await sendEmail(ticket.assignedToId.email, `Ticket Priority Updated: ${ticket.title}`, `
+          <h1>The priority of the ticket assigned to you has been updated:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>New Priority: ${priority}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updatePriority - Priority update notification sent to assignee: ${ticket.assignedToId.email}`);
+      }
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: updatePriority - Error sending priority update notification:', emailError);
+      // Handle error
+    }
 
     console.log('TICKET CONTROLLER: updatePriority - Ticket priority updated:', updatedTicket);
     res.json(updatedTicket);
@@ -474,7 +654,9 @@ export const assignTicket = async (req, res, next) => {
       }
     }
 
-    const ticket = await Ticket.findById(req.params.id);
+    const ticket = await Ticket.findById(req.params.id)
+      .populate('authorId', 'email')
+      .populate('assignedToId', 'email');
 
     if (!ticket) {
       console.log(`TICKET CONTROLLER: assignTicket - Ticket not found with ID: ${req.params.id}`);
@@ -497,10 +679,34 @@ export const assignTicket = async (req, res, next) => {
     await ticket.save();
 
     const updatedTicket = await Ticket.findById(req.params.id)
-      .populate('authorId', 'firstName lastName')
-      .populate('assignedToId', 'firstName lastName')
+      .populate('authorId', 'firstName lastName email')
+      .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
       .populate('topicId', 'name');
+
+    // Send email notifications
+    try {
+      if (ticket.authorId && ticket.authorId.email) {
+        await sendEmail(ticket.authorId.email, `Ticket Assigned: ${ticket.title}`, `
+          <h1>Ticket Assigned:</h1>
+          <p>Title: ${ticket.title}</p>
+          <p>This ticket has been assigned to a new user.</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: assignTicket - Assignment notification sent to author: ${ticket.authorId.email}`);
+      }
+      if (updatedTicket.assignedToId && updatedTicket.assignedToId.email) {
+        await sendEmail(updatedTicket.assignedToId.email, `Ticket Assigned To You: ${updatedTicket.title}`, `
+          <h1>A ticket has been assigned to you:</h1>
+          <p>Title: ${updatedTicket.title}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: assignTicket - Assignment notification sent to new assignee: ${updatedTicket.assignedToId.email}`);
+      }
+    } catch (emailError) {
+      console.error('TICKET CONTROLLER: assignTicket - Error sending assignment notification:', emailError);
+      // Handle error
+    }
 
     console.log('TICKET CONTROLLER: assignTicket - Ticket assigned to user:', updatedTicket);
     res.json(updatedTicket);

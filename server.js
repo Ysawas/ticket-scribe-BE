@@ -11,7 +11,7 @@ import departmentRoutes from './routes/departments.js';
 import topicRoutes from './routes/topics.js';
 import ticketRoutes from './routes/tickets.js';
 import dotenv from 'dotenv';
-import rateLimit from 'express-rate-limit'; //  Import express-rate-limit
+import rateLimit from 'express-rate-limit';
 dotenv.config();
 
 // Connect to database
@@ -54,6 +54,13 @@ app.get('/', (req, res) => {
 
 // Error handler
 app.use(errorHandler);
+
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    console.log(`SERVER: Request completed - Status: ${res.statusCode}, Method: ${req.method}, URL: ${req.originalUrl}`);
+  });
+  next();
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
