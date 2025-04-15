@@ -1,5 +1,7 @@
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
+import Department from '../models/Department.js';
+import Topic from '../models/Topic.js';
 import { validationResult } from 'express-validator';
 import sendEmail from '../utils/emailService.js';
 
@@ -60,6 +62,7 @@ export const getTicketById = async (req, res, next) => {
 
 export const createTicket = async (req, res, next) => {
   console.log('TICKET CONTROLLER: createTicket - START');
+  console.log('TICKET CONTROLLER: createTicket - Request Body (raw):', req.body);  //  Log the raw body
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -68,7 +71,25 @@ export const createTicket = async (req, res, next) => {
     }
 
     const { title, description, priority, authorId, assignedToId, departmentId, topicId } = req.body;
-    console.log('TICKET CONTROLLER: createTicket - Request body:', req.body);
+    /*console.log('TICKET CONTROLLER: createTicket - Request body:', req.body);*/
+    console.log('TICKET CONTROLLER: createTicket - Destructured body:', { title, description, priority, authorId, assignedToId, departmentId, topicId });
+
+
+    // Verify that authorId, departmentId, and topicId are valid (you might want to create middleware for this)
+    const author = await User.findById(authorId);
+    if (!author) {
+      return res.status(400).json({ error: 'Invalid Author', details: `Author with ID ${authorId} not found` });
+    }
+
+    const department = await Department.findById(departmentId);
+    if (!department) {
+      return res.status(400).json({ error: 'Invalid Department', details: `Department with ID ${departmentId} not found` });
+    }
+
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(400).json({ error: 'Invalid Topic', details: `Topic with ID ${topicId} not found` });
+    }
 
     const ticket = new Ticket({
       title,
@@ -280,6 +301,16 @@ export const updateTicket = async (req, res, next) => {
       statusChanged = true;
     }
 
+    if (progress && progress !== ticket.progress) {
+      ticketFields.progress = progress;
+      historyEntries.push({
+        field: 'progress',
+        oldValue: ticket.progress,
+        newValue: progress,
+        userId
+      });
+    }
+
     if (priority && priority !== ticket.priority) {
       ticketFields.priority = priority;
       historyEntries.push({
@@ -354,7 +385,7 @@ export const updateTicket = async (req, res, next) => {
       return res.status(500).json({ error: 'Ticket update failed' });
     }
 
-    //  Send email notifications based on changes
+    //  Send email notifications based on changes
     if (statusChanged) {
       try {
         await sendEmail(ticket.authorId.email, `Ticket Status Updated: ${ticket.title}`, `
@@ -667,7 +698,7 @@ export const assignTicket = async (req, res, next) => {
     if (assignedToId !== oldAssignedId) {
       ticket.history.push({
         field: 'assignedToId',
-        oldValue: oldAssignedId,
+        oldValue: ticket.assignedToId,
         newValue: assignedToId,
         userId
       });
