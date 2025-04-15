@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import sendEmail from '../utils/emailService.js';
-import Department from '../models/Department.js'; //  Import Department model
+import Department from '../models/Department.js';
 
 export const getAllUsers = async (req, res, next) => {
   console.log('USER CONTROLLER: getAllUsers - START');
@@ -9,7 +9,7 @@ export const getAllUsers = async (req, res, next) => {
     const { limit = 10, page = 1 } = req.query;
     const skip = (page - 1) * limit;
 
-    const users = await User.find().select('-password').populate('department', 'name').skip(parseInt(skip)).limit(parseInt(limit));
+    const users = await User.find().select('-password').populate('department', 'name').populate('defaultDepartment', 'name').skip(parseInt(skip)).limit(parseInt(limit));
     const total = await User.countDocuments();
 
     console.log(`USER CONTROLLER: getAllUsers - Found ${users.length} users`);
@@ -30,7 +30,7 @@ export const getAllUsers = async (req, res, next) => {
 export const getUserById = async (req, res, next) => {
   console.log(`USER CONTROLLER: getUserById - START - ID: ${req.params.id}`);
   try {
-    const user = await User.findById(req.params.id).select('-password').populate('department', 'name');
+    const user = await User.findById(req.params.id).select('-password').populate('department', 'name').populate('defaultDepartment', 'name');
 
     if (!user) {
       console.log(`USER CONTROLLER: getUserById - User not found with ID: ${req.params.id}`);
@@ -56,7 +56,7 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, password, role, status, department: departmentId, email } = req.body;
+    const { firstName, lastName, username, birthday, password, role, status, department: departmentId, defaultDepartment: defaultDepartmentId, email } = req.body;
     console.log('USER CONTROLLER: createUser - Request body:', req.body);
 
     // Check if user exists
@@ -66,8 +66,27 @@ export const createUser = async (req, res, next) => {
       return res.status(400).json({ error: 'User with this email or username already exists' });
     }
 
+    let assignedDefaultDepartment = null;
+
+    // Basic role-based default department assignment
+    if (role === 'admin') {
+      const itDepartment = await Department.findOne({ name: 'IT' });
+      if (itDepartment) {
+        assignedDefaultDepartment = itDepartment._id;
+      } else {
+        console.warn('USER CONTROLLER: createUser - IT Department not found, defaultDepartment not set for admin.');
+      }
+    } else if (role === 'manager') {
+      const managersDepartment = await Department.findOne({ name: 'Managers' });
+      if (managersDepartment) {
+        assignedDefaultDepartment = managersDepartment._id;
+      } else {
+        console.warn('USER CONTROLLER: createUser - Managers Department not found, defaultDepartment not set for manager.');
+      }
+    }
+
     // Create user object
-    user = new User({
+    const userData = {
       firstName,
       lastName,
       username,
@@ -75,47 +94,60 @@ export const createUser = async (req, res, next) => {
       password,
       role,
       status,
-      department: departmentId,
+      defaultDepartment: defaultDepartmentId || assignedDefaultDepartment,
       email
-    });
+    };
 
-    // Validation *before* saving
-    try {
-      await user.validate(); // Manually trigger validation
-    } catch (validationError) {
-      if (validationError.name === 'ValidationError') {
-        const statusError = validationError.errors.status;
-        const departmentError = validationError.errors.department;
-
-        if (statusError) {
-          return res.status(400).json({ error: 'Status is required', details: statusError.message });
-        }
-        if (departmentError) {
-          return res.status(400).json({ error: 'Department is required', details: departmentError.message });
-        }
+    // Conditionally assign department
+    if (role !== 'admin' && !departmentId) {
+      console.log('USER CONTROLLER: createUser - Department is required, returning error.');
+      return res.status(400).json({ error: 'Department is required for this role', details: 'Department is required for roles other than admin' });
+    } else if (departmentId) {
+      const department = await Department.findById(departmentId);
+      if (!department) {
+        console.warn(`USER CONTROLLER: createUser - Department with ID ${departmentId} not found, returning error.`);
+        return res.status(400).json({ error: 'Invalid Department', details: `Department with ID ${departmentId} not found` });
       }
-      // If it's not a validation error, re-throw it
-      throw validationError;
+      userData.department = departmentId;
+      console.log('USER CONTROLLER: createUser - Department ID is valid:', departmentId);
+    } else {
+      console.log('USER CONTROLLER: createUser - Role is admin, department is not required.');
     }
 
+    user = new User(userData);
+    console.log('USER CONTROLLER: createUser - User object before save:', JSON.stringify(user, null, 2));
 
-    await user.save();
+    try {
+      await user.save();
+      console.log('USER CONTROLLER: createUser - User saved successfully:', user._id);
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        const errors = [];
+        for (const key in error.errors) {
+          errors.push({ path: key, message: error.errors[key].message });
+        }
+        console.log('USER CONTROLLER: createUser - Mongoose Validation Error:', JSON.stringify(errors, null, 2));
+        return res.status(400).json({ error: 'Validation Error', details: errors });
+      }
+      console.error('USER CONTROLLER: createUser - Error during user.save():', error);
+      throw error; // Re-throw other errors
+    }
 
     //  Add user to department's members array
-    if (departmentId) {
-      console.log(`USER CONTROLLER: createUser - Adding user to department with ID: ${departmentId}`);
+    if (user.department) {
       try {
-        const department = await Department.findById(departmentId);
+        const department = await Department.findById(user.department);
         if (department) {
-          console.log(`USER CONTROLLER: createUser - Department found:`, department);
-          department.members.push(user._id);
-          await department.save();
-          console.log(`USER CONTROLLER: createUser - Department saved. members:`, department.members);
+          if (!department.members.includes(user._id)) {
+            department.members.push(user._id);
+            await department.save();
+            console.log(`USER CONTROLLER: createUser - User added to department ${user.department}`);
+          }
         } else {
-          console.warn(`USER CONTROLLER: createUser - Department with ID ${departmentId} NOT found!`);
+          console.warn(`USER CONTROLLER: createUser - Department with ID ${user.department} not found, user not added to department members.`);
         }
-      } catch (error) {
-        console.error(`USER CONTROLLER: createUser - Error updating department:`, error);
+      } catch (departmentError) {
+        console.error('USER CONTROLLER: createUser - Error updating department:', departmentError);
       }
     }
 
@@ -136,7 +168,7 @@ export const createUser = async (req, res, next) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
-    console.log('USER CONTROLLER: createUser - User created:', userResponse);
+    console.log('USER CONTROLLER: createUser - User created:', JSON.stringify(userResponse, null, 2));
     res.status(201).json(userResponse);
   } catch (error) {
     console.error('USER CONTROLLER: createUser - ERROR:', error);
@@ -155,7 +187,7 @@ export const updateUser = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, username, birthday, role, status, department: departmentId, email } = req.body;
+    const { firstName, lastName, username, birthday, role, status, department: departmentId, defaultDepartment: defaultDepartmentId, email } = req.body;
     console.log('USER CONTROLLER: updateUser - Request body:', req.body);
 
     // Build user object
@@ -167,45 +199,63 @@ export const updateUser = async (req, res, next) => {
     if (role) userFields.role = role;
     if (status) userFields.status = status;
     if (email) userFields.email = email;
+    if (defaultDepartmentId) userFields.defaultDepartment = defaultDepartmentId;
     userFields.updatedAt = Date.now();
 
-    //  Handle department change
-    if (departmentId) {
-      console.log(`USER CONTROLLER: updateUser - Changing user ${req.params.id} to department ${departmentId}`);
-      const newDepartment = await Department.findById(departmentId);
-      const oldDepartment = await User.findById(req.params.id).populate('department');
+    // Fetch the original user
+    const originalUser = await User.findById(req.params.id).populate('department').populate('defaultDepartment');
 
-      if (newDepartment) {
-        console.log(`USER CONTROLLER: updateUser - New department found:`, newDepartment);
-        userFields.department = departmentId;
-        newDepartment.members.push(req.params.id);
-        await newDepartment.save();
-        console.log(`USER CONTROLLER: updateUser - User added to new department. Members:`, newDepartment.members);
-
-        if (oldDepartment && oldDepartment.department) {
-          console.log(`USER CONTROLLER: updateUser - Old department found:`, oldDepartment.department);
-          oldDepartment.department.members.pull(req.params.id);
-          await oldDepartment.department.save();
-          console.log(`USER CONTROLLER: updateUser - User removed from old department. Members:`, oldDepartment.department.members);
-        }
-      } else {
-        console.warn(`USER CONTROLLER: updateUser - Department with ID ${departmentId} not found, user's department not updated.`);
-        //  Decide how to handle this
-      }
+    if (!originalUser) {
+      console.log(`USER CONTROLLER: updateUser - User not found with ID: ${req.params.id}`);
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    let user;
+    //  Handle department change
+    if (departmentId && departmentId !== originalUser.department?.toString()) {
+      try {
+        const newDepartment = await Department.findById(departmentId);
+        const oldDepartment = originalUser.department ? await Department.findById(originalUser.department) : null;
+
+        if (newDepartment) {
+          userFields.department = departmentId;
+
+          if (oldDepartment) {
+            oldDepartment.members.pull(req.params.id);
+            await oldDepartment.save();
+            console.log(`USER CONTROLLER: updateUser - User removed from old department: ${oldDepartment.name}`);
+          }
+
+          if (!newDepartment.members.includes(req.params.id)) {
+            newDepartment.members.push(req.params.id);
+            await newDepartment.save();
+            console.log(`USER CONTROLLER: updateUser - User added to new department: ${newDepartment.name}`);
+          }
+
+        } else {
+          console.warn(`USER CONTROLLER: updateUser - Department with ID ${departmentId} not found, user's department not updated.`);
+          return res.status(400).json({ error: 'Invalid Department', details: `Department with ID ${departmentId} not found` });
+        }
+      } catch (departmentError) {
+        console.error('USER CONTROLLER: updateUser - Error updating department:', departmentError);
+        return next(departmentError);
+      }
+    } else if (departmentId) {
+      userFields.department = departmentId; // Assign departmentId even if it's the same (for consistency)
+    } else {
+      userFields.department = originalUser.department; // Restore original department
+    }
+
     try {
       // Update user
-      user = await User.findByIdAndUpdate(
+      const user = await User.findByIdAndUpdate(
         req.params.id,
         { $set: userFields },
-        { new: true, runValidators: true } //  Important: runValidators
-      ).select('-password').populate('department', 'name');
+        { new: true, runValidators: true }
+      ).select('-password').populate('department', 'name').populate('defaultDepartment', 'name');
 
       if (!user) {
-        console.log(`USER CONTROLLER: updateUser - User not found with ID: ${req.params.id}`);
-        return res.status(404).json({ error: 'User not found' });
+        console.log(`USER CONTROLLER: updateUser - User update failed for ID: ${req.params.id}`);
+        return res.status(500).json({ error: 'User update failed' });
       }
 
       console.log('USER CONTROLLER: updateUser - User updated:', user);
@@ -213,19 +263,15 @@ export const updateUser = async (req, res, next) => {
 
     } catch (error) {
       if (error.name === 'ValidationError') {
-        const statusError = error.errors.status;
-        const departmentError = error.errors.department;
-
-        if (statusError) {
-          return res.status(400).json({ error: 'Status is required', details: statusError.message });
+        // Validation failed
+        const errors = [];
+        for (const key in error.errors) {
+          errors.push({ path: key, message: error.errors[key].message });
         }
-        if (departmentError) {
-          return res.status(400).json({ error: 'Department is required', details: departmentError.message });
-        }
+        return res.status(400).json({ error: 'Validation Error', details: errors });
       }
-      throw error; // Re-throw other errors
+      throw error;
     }
-
 
   } catch (error) {
     console.error('USER CONTROLLER: updateUser - ERROR:', error);
@@ -238,7 +284,7 @@ export const updateUser = async (req, res, next) => {
 export const deleteUser = async (req, res, next) => {
   console.log(`USER CONTROLLER: deleteUser - START - ID: ${req.params.id}`);
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).populate('department');
 
     if (!user) {
       console.log(`USER CONTROLLER: deleteUser - User not found with ID: ${req.params.id}`);
@@ -247,13 +293,17 @@ export const deleteUser = async (req, res, next) => {
 
     //  Remove user from department's members array
     if (user.department) {
-      const department = await Department.findById(user.department);
-      if (department) {
-        department.members.pull(req.params.id);
-        await department.save();
-      } else {
-        console.warn(`USER CONTROLLER: deleteUser - Department with ID ${user.department} not found, user not removed from department members.`);
-        //  Decide how to handle this (maybe don't throw an error)
+      try {
+        const department = await Department.findById(user.department._id);
+        if (department) {
+          department.members.pull(req.params.id);
+          await department.save();
+          console.log(`USER CONTROLLER: deleteUser - User removed from department: ${department.name}`);
+        } else {
+          console.warn(`USER CONTROLLER: deleteUser - Department with ID ${user.department._id} not found, user not removed.`);
+        }
+      } catch (departmentError) {
+        console.error('USER CONTROLLER: deleteUser - Error updating department:', departmentError);
       }
     }
 

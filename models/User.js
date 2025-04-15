@@ -30,13 +30,25 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'agent', 'customer'],
-    default: 'customer'
+    enum: ['admin', 'manager', 'supervisor', 'agent'], // Removed 'customer'
+    default: 'agent',
+    required: true
   },
   department: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Department',
-    required: true
+    required: function() {
+      return this.role !== 'admin';
+    }
+  },
+  defaultDepartment: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Department'
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'pending'],
+    default: 'pending'
   },
   createdAt: {
     type: Date,
@@ -45,11 +57,6 @@ const UserSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  },
-  status: {  //  Add the status field
-    type: String,
-    enum: ['active', 'inactive', 'pending'],
-    default: 'pending'
   }
 });
 

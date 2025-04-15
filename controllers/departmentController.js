@@ -1,6 +1,9 @@
 import Department from '../models/Department.js';
 import { validationResult } from 'express-validator';
-import sendEmail from '../utils/emailService.js'; // Import email service
+import sendEmail from '../utils/emailService.js';
+import User from '../models/User.js'; // Import User model
+import Topic from '../models/Topic.js'; // Import Topic model
+import Ticket from '../models/Ticket.js'; // Import Ticket model
 
 export const getAllDepartments = async (req, res, next) => {
   console.log('DEPARTMENT CONTROLLER: getAllDepartments - START');
@@ -9,10 +12,11 @@ export const getAllDepartments = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const departments = await Department.find()
-      .populate('supervisor', 'firstName lastName email') // Corrected
-      .populate('manager', 'firstName lastName email')    // Corrected
+      .populate('supervisor', 'firstName lastName email')
+      .populate('manager', 'firstName lastName email')
       .populate('parentDepartment', 'name')
       .populate('members', 'firstName lastName email')
+      .populate('topics', 'name category subcategory')
       .skip(parseInt(skip))
       .limit(parseInt(limit));
     const total = await Department.countDocuments();
@@ -36,10 +40,11 @@ export const getDepartmentById = async (req, res, next) => {
   console.log(`DEPARTMENT CONTROLLER: getDepartmentById - START - ID: ${req.params.id}`);
   try {
     const department = await Department.findById(req.params.id)
-      .populate('supervisor', 'firstName lastName email') // Corrected
-      .populate('manager', 'firstName lastName email')    // Corrected
+      .populate('supervisor', 'firstName lastName email')
+      .populate('manager', 'firstName lastName email')
       .populate('parentDepartment', 'name')
-      .populate('members', 'firstName lastName email');
+      .populate('members', 'firstName lastName email')
+      .populate('topics', 'name category subcategory');
 
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: getDepartmentById - Department not found with ID: ${req.params.id}`);
@@ -138,12 +143,13 @@ export const updateDepartment = async (req, res, next) => {
     const department = await Department.findByIdAndUpdate(
       req.params.id,
       { $set: departmentFields },
-      { new: true }
+      { new: true, runValidators: true }
     )
       .populate('supervisor', 'firstName lastName email')
       .populate('manager', 'firstName lastName email')
       .populate('parentDepartment', 'name')
-      .populate('members', 'firstName lastName email');
+      .populate('members', 'firstName lastName email')
+      .populate('topics', 'name category subcategory');
 
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: updateDepartment - Department not found with ID: ${req.params.id}`);
@@ -181,10 +187,24 @@ export const updateDepartment = async (req, res, next) => {
 export const deleteDepartment = async (req, res, next) => {
   console.log(`DEPARTMENT CONTROLLER: deleteDepartment - START - ID: ${req.params.id}`);
   try {
-    const department = await Department.findById(req.params.id);
+    const department = await Department.findById(req.params.id)
+      .populate('members', 'firstName lastName email')
+      .populate('topics', 'name category subcategory');
+
     if (!department) {
       console.log(`DEPARTMENT CONTROLLER: deleteDepartment - Department not found with ID: ${req.params.id}`);
       return res.status(404).json({ error: 'Department not found' });
+    }
+
+    if (department.members.length > 0 || department.topics.length > 0) {
+      let errorMessage = "Cannot delete department. ";
+      if (department.members.length > 0) {
+        errorMessage += `There are ${department.members.length} users in this department. `;
+      }
+      if (department.topics.length > 0) {
+        errorMessage += `There are ${department.topics.length} topics in this department.`;
+      }
+      return res.status(400).json({ error: errorMessage });
     }
 
     await Department.findByIdAndRemove(req.params.id);
