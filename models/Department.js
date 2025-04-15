@@ -21,6 +21,10 @@ const DepartmentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  topics: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Topic'
+  }],
   parentDepartment: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Department'

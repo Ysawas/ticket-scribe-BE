@@ -13,7 +13,8 @@ export default (req, res, next) => {  //  ESM
   // Verify token
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    console.log('AUTH MIDDLEWARE: Decoded token:', decoded);  //  Add this line
+    req.user = decoded.user;
     next();
   } catch (error) {
     res.status(401).json({ error: 'Token is not valid' });
