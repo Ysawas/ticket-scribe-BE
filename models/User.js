@@ -17,6 +17,10 @@ const UserSchema = new mongoose.Schema({
     lowercase: true,
     trim: true
   },
+  birthday: {
+    type: Date,
+    required: false
+  },
   email: {
     type: String,
     required: true,
@@ -30,7 +34,7 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'manager', 'supervisor', 'agent'], // Removed 'customer'
+    enum: ['admin', 'manager', 'supervisor', 'agent'],
     default: 'agent',
     required: true
   },
