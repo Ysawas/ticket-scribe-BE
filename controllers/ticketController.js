@@ -4,6 +4,7 @@ import Department from '../models/Department.js';
 import Topic from '../models/Topic.js';
 import { validationResult } from 'express-validator';
 import sendEmail from '../utils/emailService.js';
+import mongoose from 'mongoose'; //  Import mongoose for transactions
 
 export const getAllTickets = async (req, res, next) => {
   console.log('TICKET CONTROLLER: getAllTickets - START');
@@ -59,11 +60,11 @@ export const getTicketById = async (req, res, next) => {
     console.log('TICKET CONTROLLER: getTicketById - END');
   }
 };
-
+/*
 export const createTicket = async (req, res, next) => {
   console.log('TICKET CONTROLLER: createTicket - START');
   console.log('TICKET CONTROLLER: createTicket - Request Body (raw):', req.body);  //  Log the raw body
-  try {
+  try{
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('TICKET CONTROLLER: createTicket - Validation errors:', errors.array());
@@ -71,7 +72,7 @@ export const createTicket = async (req, res, next) => {
     }
 
     const { title, description, priority, authorId, assignedToId, departmentId, topicId } = req.body;
-    /*console.log('TICKET CONTROLLER: createTicket - Request body:', req.body);*/
+    //console.log('TICKET CONTROLLER: createTicket - Request body:', req.body);
     console.log('TICKET CONTROLLER: createTicket - Destructured body:', { title, description, priority, authorId, assignedToId, departmentId, topicId });
 
 
@@ -153,6 +154,151 @@ export const createTicket = async (req, res, next) => {
     console.log('TICKET CONTROLLER: createTicket - END');
   }
 };
+*/
+export const createTicket = async (req, res, next) => {
+  console.log('TICKET CONTROLLER: createTicket - START');
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('TICKET CONTROLLER: createTicket - Validation errors:', errors.array());
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { title, description, priority, authorId, assignedToId, departmentId, topicId } = req.body;
+    console.log('TICKET CONTROLLER: createTicket - Request body:', req.body);
+
+    // Start a Mongoose session for transaction-like behavior
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    let ticket;
+    try {
+      //  Generate ticket number *within* the transaction
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const count = await Ticket.countDocuments({ createdAt: { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } }).session(session).exec(); //  Within transaction!
+      //const ticketNumber = `TKT-<span class="math-inline">\{year\}</span>{month}<span class="math-inline">\{day\}\-</span>{String(count + 1).padStart(4, '0')}`;
+
+      console.log('TICKET CONTROLLER: createTicket - Generated ticketNumber:', ticketNumber);
+
+      // Verify that authorId, departmentId, and topicId are valid
+      const author = await User.findById(authorId).session(session).exec();
+      if (!author) {
+        await session.abortTransaction();
+        return res.status(400).json({ error: 'Invalid Author', details: `Author with ID ${authorId} not found` });
+      }
+
+      const department = await Department.findById(departmentId).session(session).exec();
+      if (!department) {
+        await session.abortTransaction();
+        return res.status(400).json({ error: 'Invalid Department', details: `Department with ID ${departmentId} not found` });
+      }
+
+      const topic = await Topic.findById(topicId).session(session).exec();
+      if (!topic) {
+        await session.abortTransaction();
+        return res.status(400).json({ error: 'Invalid Topic', details: `Topic with ID ${topicId} not found` });
+      }
+
+      ticket = new Ticket({
+        title,
+        description,
+        priority,
+        authorId,
+        assignedToId,
+        departmentId,
+        topicId
+        
+      });
+
+      ticket.history.push({
+        userId: authorId,
+        field: 'status',
+        newValue: 'open'
+      });
+
+      await ticket.save({ session });
+      console.log('TICKET CONTROLLER: createTicket - Ticket saved successfully');
+
+      await session.commitTransaction();
+      console.log('TICKET CONTROLLER: createTicket - Transaction committed');
+
+      await session.commitTransaction();
+      console.log('TICKET CONTROLLER: createTicket - Transaction committed successfully.');
+
+      const populatedTicket = await Ticket.findById(ticket._id)
+        .populate('authorId', 'firstName lastName email')
+        .populate('assignedToId', 'firstName lastName email')
+        .populate('departmentId', 'name')
+        .populate('topicId', 'category subcategory');
+
+      // Send email to author
+      try {
+        await sendEmail(populatedTicket.authorId.email, 'New Ticket Created', `
+          <h1>A new ticket has been created</h1>
+          <p>Title: ${title}</p>
+          <p>Description: <span class="math-inline">\{description\}</p\>
+<p\>You can view it here\: <a href\="your\_app\_url/tickets/</span>{populatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log('TICKET CONTROLLER: createTicket - Email sent to author:', populatedTicket.authorId.email);
+      } catch (emailError) {
+        console.error('TICKET CONTROLLER: createTicket - Error sending email to author:', emailError);
+        // Handle error (log, etc.)
+      }
+
+      // Send email to assigned user (if assigned)
+      if (populatedTicket.assignedToId) {
+        try {
+          await sendEmail(populatedTicket.assignedToId.email, 'New Ticket Assigned to You', `
+            <h1>A new ticket has been assigned to you</h1>
+            <p>Title: ${title}</p>
+            <p>Description: <span class="math-inline">\{description\}</p\>
+<p\>You can view it here\: <a href\="your\_app\_url/tickets/</span>{populatedTicket._id}">View Ticket</a></p>
+          `);
+          console.log('TICKET CONTROLLER: createTicket - Email sent to assigned user:', populatedTicket.assignedToId.email);
+        } catch (emailError) {
+          console.error('TICKET CONTROLLER: createTicket - Error sending email to assigned user:', emailError);
+          // Handle error
+        }
+      }
+
+      res.status(201).json(populatedTicket);
+   /*
+    } catch (error) {
+      await session.abortTransaction();
+      console.error('TICKET CONTROLLER: createTicket - Transaction aborted. ERROR:', error);
+      next(error);
+    } finally {
+      session.endSession();
+      console.log('TICKET CONTROLLER: createTicket - END');
+    }
+
+  } catch (error) {
+    console.error('TICKET CONTROLLER: createTicket - ERROR:', error);
+    next(error);
+  } finally {
+    console.log('TICKET CONTROLLER: createTicket - END');
+  }
+};
+*/
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('TICKET CONTROLLER: createTicket - Transaction error:', error);
+    return next(error);
+  } finally {
+    session.endSession();
+    console.log('TICKET CONTROLLER: createTicket - END');
+  }
+
+  } catch (error) {
+    console.error('TICKET CONTROLLER: createTicket - ERROR:', error);
+    next(error);
+  } finally {
+    console.log('TICKET CONTROLLER: createTicket - END');
+  }
+  };
 
 export const createTicketWithAttachments = async (req, res, next) => {
   console.log('TICKET CONTROLLER: createTicketWithAttachments - START');

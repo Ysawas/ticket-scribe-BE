@@ -144,6 +144,7 @@ const TicketSchema = new mongoose.Schema({
 });
 
 // Generate ticket number
+/*
 TicketSchema.pre('save', async function(next) {
   if (!this.ticketNumber) {
     const now = new Date();
@@ -151,6 +152,23 @@ TicketSchema.pre('save', async function(next) {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const count = await this.constructor.countDocuments({ createdAt: { $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } });
+    this.ticketNumber = `TKT-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+  }
+  next();
+});
+*/
+TicketSchema.pre('save', async function (next) {
+  if (!this.ticketNumber) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const startOfDay = new Date(year, now.getMonth(), now.getDate());
+    const count = await this.constructor.countDocuments({
+      createdAt: { $gte: startOfDay }
+    });
+
     this.ticketNumber = `TKT-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
   }
   next();
