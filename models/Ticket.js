@@ -75,6 +75,7 @@ const AttachmentSchema = new mongoose.Schema({
 const TicketSchema = new mongoose.Schema({
   ticketNumber: {
     type: String,
+    required: true,
     unique: true
   },
   title: {

@@ -1,9 +1,10 @@
 import express from 'express';
-const router = express.Router();
 import { check } from 'express-validator';
 import * as ticketController from '../controllers/ticketController.js';
 import auth from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
+
+const router = express.Router();
 
 // @route   GET /api/tickets
 // @desc    Get all tickets
