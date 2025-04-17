@@ -32,6 +32,13 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String
+  },
   role: {
     type: String,
     enum: ['admin', 'manager', 'supervisor', 'agent'],
@@ -41,7 +48,7 @@ const UserSchema = new mongoose.Schema({
   department: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Department',
-    required: function() {
+    required: function () {
       return this.role !== 'admin';
     }
   },
@@ -51,8 +58,8 @@ const UserSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'pending'],
-    default: 'pending'
+    enum: ['pending_email', 'pending_admin', 'active', 'inactive'],
+    default: 'pending_email'
   },
   createdAt: {
     type: Date,
@@ -65,10 +72,8 @@ const UserSchema = new mongoose.Schema({
 });
 
 // Pre-save middleware to hash password before saving
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
+UserSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -79,8 +84,8 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare passwords
-UserSchema.methods.comparePassword = async function(candidatePassword) {
+// Password comparison method
+UserSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

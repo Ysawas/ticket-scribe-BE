@@ -1,18 +1,37 @@
 import express from 'express';
-const router = express.Router();
 import { check } from 'express-validator';
-import * as userController from '../controllers/userController.js';
 import auth from '../middleware/auth.js';
+import isAdmin from '../middleware/isAdmin.js';
+import * as userController from '../controllers/userController.js';
+
+const router = express.Router();
+
+//
+// ✅ PUBLIC ROUTES
+//
+
+// @route   GET /api/users/verify-email
+// @desc    Verify email via token
+// @access  Public
+router.get('/verify-email', userController.verifyEmail);
+
+//
+// ✅ ADMIN ROUTES (protected)
+//
+
+// @route   PATCH /api/users/approve/:id
+// @desc    Admin approves user after email verification
+// @access  Private (admin only)
+router.patch('/approve/:id', auth, isAdmin, userController.approveUser);
+
+//
+// ✅ AUTHENTICATED ROUTES
+//
 
 // @route   GET /api/users
 // @desc    Get all users
 // @access  Private
 router.get('/', auth, userController.getAllUsers);
-
-// @route   GET /api/users/:id
-// @desc    Get user by ID
-// @access  Private
-router.get('/:id', auth, userController.getUserById);
 
 // @route   GET /api/users/username/:username
 // @desc    Get user by username
@@ -29,6 +48,15 @@ router.get('/email/:email', auth, userController.getUserByEmail);
 // @access  Private
 router.get('/department/:departmentId', auth, userController.getUserByDepartment);
 
+// @route   GET /api/users/:id
+// @desc    Get user by ID
+// @access  Private
+router.get('/:id', auth, userController.getUserById);
+
+//
+// ✅ USER CREATION & MANAGEMENT
+//
+
 // @route   POST /api/users
 // @desc    Create a new user
 // @access  Private (admin only)
@@ -36,13 +64,19 @@ router.post(
   '/',
   [
     auth,
+    isAdmin,
     check('firstName', 'First name is required').notEmpty(),
     check('lastName', 'Last name is required').notEmpty(),
     check('username', 'Username is required').notEmpty(),
     check('username', 'Username must be alphanumeric').isAlphanumeric(),
     check('email', 'Please include a valid email').isEmail(),
-    check('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 }),
-    check('role', 'Role must be either admin, manager, supervisor, or agent').isIn(['admin', 'manager', 'supervisor', 'agent'])
+    check('password', 'Password must be 6 or more characters').isLength({ min: 6 }),
+    check('role', 'Role must be either admin, manager, supervisor, or agent').isIn([
+      'admin',
+      'manager',
+      'supervisor',
+      'agent'
+    ])
   ],
   userController.createUser
 );
@@ -54,12 +88,11 @@ router.put(
   '/:id',
   [
     auth,
-    check('firstName', 'First name is required').optional().notEmpty(),
-    check('lastName', 'Last name is required').optional().notEmpty(),
-    check('username', 'Username is required').optional().notEmpty(),
-    check('username', 'Username must be alphanumeric').optional().isAlphanumeric(),
-    check('email', 'Please include a valid email').optional().isEmail(),
-    check('role', 'Role must be either admin, manager, supervisor, or agent').optional().isIn(['admin', 'manager', 'supervisor', 'agent'])
+    check('firstName').optional().notEmpty(),
+    check('lastName').optional().notEmpty(),
+    check('username').optional().notEmpty().isAlphanumeric(),
+    check('email').optional().isEmail(),
+    check('role').optional().isIn(['admin', 'manager', 'supervisor', 'agent'])
   ],
   userController.updateUser
 );
@@ -67,6 +100,6 @@ router.put(
 // @route   DELETE /api/users/:id
 // @desc    Delete a user
 // @access  Private (admin only)
-router.delete('/:id', auth, userController.deleteUser);
+router.delete('/:id', auth, isAdmin, userController.deleteUser);
 
 export default router;

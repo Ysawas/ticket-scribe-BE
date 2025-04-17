@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import User from '../models/User.js';
 import { validationResult } from 'express-validator';
 import sendEmail from '../utils/emailService.js';
@@ -103,9 +104,46 @@ export const createUser = async (req, res, next) => {
       userData.department = departmentId;
     }
 
-    const user = new User(userData);
+    //const user = new User(userData); //stop the classicall Registration
+
+    // Generate verification token
+      const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+
+    // ✅ Declare 'user' before using it
+      const user = new User({
+      ...userData,
+      emailVerificationToken,
+      emailVerified: false,
+      status: 'pending_email'
+     });
+
+     console.log('DEBUG: Email token:', emailVerificationToken);
+     console.log('DEBUG: Email:', email);
+     console.log('DEBUG: User:', userData);
+    
+   // Hash the password before saving 
+  //user.password = await user.hashPassword(password);   Temp deactivate hashing for testing
+    
+  // Save the user to the database
+     
+
     await user.save();
 
+   /*const verificationLink = `http://your-frontend-url.com/verify-email?token=${emailVerificationToken}&email=${encodeURIComponent(email)}`; */
+
+   const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${emailVerificationToken}&email=${encodeURIComponent(email)}`;
+
+
+await sendEmail(
+  email,
+  'Verify Your Email - Ticket Scribe',
+  `
+    <h1>Hello ${firstName},</h1>
+    <p>Click the button below to verify your email address:</p>
+    <a href="${verificationLink}" style="background:#007BFF;padding:10px 20px;color:white;text-decoration:none;">Verify Email</a>
+    <p>If you did not request this, just ignore this email.</p>
+  `
+);
     if (user.department) {
       const department = await Department.findById(user.department);
       if (department && !department.members.includes(user._id)) {
@@ -130,6 +168,82 @@ export const createUser = async (req, res, next) => {
     next(error);
   }
 };
+
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const { email, token } = req.query;
+
+    if (!email || !token) {
+      return res.status(400).json({ error: 'Missing email or token' });
+    }
+
+    const user = await User.findOne({ email, emailVerificationToken: token });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.status = 'pending_admin'; // Now waiting for admin approval
+    await user.save();
+
+    // 🔔 Notify user to wait for admin approval
+    await sendEmail(
+      user.email,
+      'Email Verified - Awaiting Admin Approval',
+      `
+        <h1>Email Verified!</h1>
+        <p>Thanks for verifying your email, ${user.firstName}!</p>
+        <p>Your account is now waiting for admin approval.</p>
+        <p>You will receive an email as soon as it's activated.</p>
+      `
+    );
+
+    res.status(200).json({ message: 'Email verified successfully. Waiting for admin approval.' });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    next(error);
+  }
+};
+
+export const approveUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user || user.status !== 'pending_admin') {
+      return res.status(404).json({ error: 'User not found or not ready for approval' });
+    }
+
+    user.status = 'active';
+    await user.save();
+
+    // ✅ Send approval email
+    try {
+      await sendEmail(
+        user.email,
+        '🎉 Your Ticket Scribe Account is Approved',
+        `
+          <h1>Hello ${user.firstName},</h1>
+          <p>Your Ticket Scribe account has been approved and is now active.</p>
+          <p>You can now <a href="https://your-frontend-url.com/login">log in</a> and start using Ticket Scribe.</p>
+        `
+      );
+    } catch (err) {
+      console.error('Error sending approval email:', err);
+    }
+
+    res.json({ message: 'User approved and activated' });
+  } catch (error) {
+    console.error('USER CONTROLLER: approveUser - ERROR:', error);
+    next(error);
+  }
+};
+
 
 export const updateUser = async (req, res, next) => {
   try {
