@@ -12,6 +12,8 @@ import topicRoutes from './routes/topics.js';
 import ticketRoutes from './routes/tickets.js';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import testEmailRoute from './routes/testEmail.js';
+
 dotenv.config();
 
 // Connect to database
@@ -46,6 +48,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/topics', topicRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/test', testEmailRoute);
+
 
 // Basic route for API health check
 app.get('/', (req, res) => {
