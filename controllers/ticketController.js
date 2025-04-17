@@ -253,7 +253,6 @@ export const createTicketWithAttachments = async (req, res, next) => {
 };
 
 
-
 export const updateTicket = async (req, res, next) => {
   console.log(`TICKET CONTROLLER: updateTicket - START - ID: ${req.params.id}`);
   try {
@@ -263,7 +262,17 @@ export const updateTicket = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { title, description, status, progress, priority, assignedToId, departmentId, topicId, escalatedToDepartmentId } = req.body;
+    const {
+      title,
+      description,
+      status,
+      progress,
+      priority,
+      assignedToId,
+      departmentId,
+      topicId,
+      escalatedToDepartmentId
+    } = req.body;
     const userId = req.user.id;
     console.log('TICKET CONTROLLER: updateTicket - Request body:', req.body);
 
@@ -283,94 +292,64 @@ export const updateTicket = async (req, res, next) => {
 
     if (title && title !== ticket.title) {
       ticketFields.title = title;
-      historyEntries.push({
-        field: 'title',
-        oldValue: ticket.title,
-        newValue: title,
-        userId
-      });
+      historyEntries.push({ field: 'title', oldValue: ticket.title, newValue: title, userId });
     }
 
     if (description && description !== ticket.description) {
       ticketFields.description = description;
-      historyEntries.push({
-        field: 'description',
-        oldValue: ticket.description,
-        newValue: description,
-        userId
-      });
+      historyEntries.push({ field: 'description', oldValue: ticket.description, newValue: description, userId });
     }
 
-    if (status && status !== ticket.status) {
-      ticketFields.status = status;
-      historyEntries.push({
-        field: 'status',
-        oldValue: ticket.status,
-        newValue: status,
-        userId
-      });
-      statusChanged = true;
-    }
-
-    if (progress && progress !== ticket.progress) {
+    // Handle progress update
+    if (typeof progress === 'number' && progress !== ticket.progress) {
       ticketFields.progress = progress;
-      historyEntries.push({
-        field: 'progress',
-        oldValue: ticket.progress,
-        newValue: progress,
-        userId
-      });
+      historyEntries.push({ field: 'progress', oldValue: ticket.progress, newValue: progress, userId });
+
+      if (progress === 100 && ticket.status !== 'closed') {
+        ticketFields.status = 'closed';
+        historyEntries.push({ field: 'status', oldValue: ticket.status, newValue: 'closed', userId });
+      }
+    }
+
+    // Handle status update
+    if (status && status !== ticket.status) {
+      if (ticket.status === 'closed' && status !== 'closed') {
+        return res.status(400).json({ error: 'Ticket is closed. Status cannot be changed anymore.' });
+      }
+      ticketFields.status = status;
+      historyEntries.push({ field: 'status', oldValue: ticket.status, newValue: status, userId });
+      statusChanged = true;
+
+      if (status === 'closed' && ticket.progress !== 100) {
+        ticketFields.progress = 100;
+        historyEntries.push({ field: 'progress', oldValue: ticket.progress, newValue: 100, userId });
+      }
     }
 
     if (priority && priority !== ticket.priority) {
       ticketFields.priority = priority;
-      historyEntries.push({
-        field: 'priority',
-        oldValue: ticket.priority,
-        newValue: priority,
-        userId
-      });
+      historyEntries.push({ field: 'priority', oldValue: ticket.priority, newValue: priority, userId });
     }
 
     if (assignedToId && assignedToId !== (ticket.assignedToId ? ticket.assignedToId.toString() : null)) {
       ticketFields.assignedToId = assignedToId;
-      historyEntries.push({
-        field: 'assignedToId',
-        oldValue: ticket.assignedToId,
-        newValue: assignedToId,
-        userId
-      });
+      historyEntries.push({ field: 'assignedToId', oldValue: ticket.assignedToId, newValue: assignedToId, userId });
       assigneeChanged = true;
     }
 
     if (departmentId && departmentId !== (ticket.departmentId ? ticket.departmentId.toString() : null)) {
       ticketFields.departmentId = departmentId;
-      historyEntries.push({
-        field: 'departmentId',
-        oldValue: ticket.departmentId,
-        newValue: departmentId,
-        userId
-      });
+      historyEntries.push({ field: 'departmentId', oldValue: ticket.departmentId, newValue: departmentId, userId });
     }
 
     if (topicId && topicId !== (ticket.topicId ? ticket.topicId.toString() : null)) {
       ticketFields.topicId = topicId;
-      historyEntries.push({
-        field: 'topicId',
-        oldValue: ticket.topicId,
-        newValue: topicId,
-        userId
-      });
+      historyEntries.push({ field: 'topicId', oldValue: ticket.topicId, newValue: topicId, userId });
     }
 
     if (escalatedToDepartmentId && escalatedToDepartmentId !== (ticket.escalatedToDepartmentId ? ticket.escalatedToDepartmentId.toString() : null)) {
       ticketFields.escalatedToDepartmentId = escalatedToDepartmentId;
-      historyEntries.push({
-        field: 'escalatedToDepartmentId',
-        oldValue: ticket.escalatedToDepartmentId,
-        newValue: escalatedToDepartmentId,
-        userId
-      });
+      historyEntries.push({ field: 'escalatedToDepartmentId', oldValue: ticket.escalatedToDepartmentId, newValue: escalatedToDepartmentId, userId });
     }
 
     ticketFields.updatedAt = Date.now();
@@ -379,11 +358,7 @@ export const updateTicket = async (req, res, next) => {
       ticketFields.$push = { history: { $each: historyEntries } };
     }
 
-    const updatedTicket = await Ticket.findByIdAndUpdate(
-      req.params.id,
-      ticketFields,
-      { new: true }
-    )
+    const updatedTicket = await Ticket.findByIdAndUpdate(req.params.id, ticketFields, { new: true })
       .populate('authorId', 'firstName lastName email')
       .populate('assignedToId', 'firstName lastName email')
       .populate('departmentId', 'name')
@@ -396,35 +371,31 @@ export const updateTicket = async (req, res, next) => {
       return res.status(500).json({ error: 'Ticket update failed' });
     }
 
-    //  Send email notifications based on changes
+    // Email notifications
     if (statusChanged) {
       try {
         await sendEmail(ticket.authorId.email, `Ticket Status Updated: ${ticket.title}`, `
           <h1>The status of your ticket has been updated:</h1>
           <p>Title: ${ticket.title}</p>
-          <p>New Status: ${status}</p>
+          <p>New Status: ${ticketFields.status}</p>
           <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
         `);
         console.log(`TICKET CONTROLLER: updateTicket - Status update notification sent to author: ${ticket.authorId.email}`);
       } catch (emailError) {
         console.error('TICKET CONTROLLER: updateTicket - Error sending status update email to author:', emailError);
-        // Handle error
       }
     }
 
-    if (assigneeChanged) {
+    if (assigneeChanged && updatedTicket.assignedToId) {
       try {
-        if (updatedTicket.assignedToId) {
-          await sendEmail(updatedTicket.assignedToId.email, `Ticket Assigned To You: ${updatedTicket.title}`, `
-            <h1>A ticket has been assigned to you:</h1>
-            <p>Title: ${updatedTicket.title}</p>
-            <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
-          `);
-          console.log(`TICKET CONTROLLER: updateTicket - Assignee update email sent to new assignee: ${updatedTicket.assignedToId.email}`);
-        }
+        await sendEmail(updatedTicket.assignedToId.email, `Ticket Assigned To You: ${updatedTicket.title}`, `
+          <h1>A ticket has been assigned to you:</h1>
+          <p>Title: ${updatedTicket.title}</p>
+          <p>You can view it here: <a href="your_app_url/tickets/${updatedTicket._id}">View Ticket</a></p>
+        `);
+        console.log(`TICKET CONTROLLER: updateTicket - Assignee update email sent to new assignee: ${updatedTicket.assignedToId.email}`);
       } catch (emailError) {
         console.error('TICKET CONTROLLER: updateTicket - Error sending assignee update email to new assignee:', emailError);
-        // Handle error
       }
     }
 
@@ -437,6 +408,7 @@ export const updateTicket = async (req, res, next) => {
     console.log('TICKET CONTROLLER: updateTicket - END');
   }
 };
+
 
 export const addComment = async (req, res, next) => {
   console.log(`TICKET CONTROLLER: addComment - START - ID: ${req.params.id}`);
