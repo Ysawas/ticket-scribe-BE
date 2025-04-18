@@ -1,0 +1,64 @@
+Project Structure Outline
+
+Here's a hierarchical outline representing the project's directory structure:
+
+Ticket Scribe - Backend
+│
+├──  config/          
+│   │   └──  db.js       (Database Connection)
+│
+├──  controllers/     
+│   │   ├──  authController.js   (Authentication)
+│   │   ├──  departmentController.js (Departments)
+│   │   ├──  ticketController.js   (Tickets)
+│   │   ├──  topicController.js    (Topics)
+│   │   └──  userController.js     (Users)
+│
+├──  middleware/      
+│   │   ├──  auth.js         (Authentication)
+│   │   ├──  upload.js       (File Uploads)
+│   │   └──  isAdmin.js    (Rate Limiting)
+│
+├──  models/          
+│   │   ├──  Department.js   (Department Model)
+│   │   ├──  Ticket.js       (Ticket Model)
+│   │   ├──  Topic.js        (Topic Model)
+│   │   └──  User.js         (User Model)
+│
+├──  routes/          
+│   │   ├──  auth.js         (Authentication Routes)
+│   │   ├──  departments.js  (Department Routes)
+│   │   ├──  tickets.js      (Ticket Routes)
+│   │   ├──  topics.js       (Topic Routes)
+│   │   └──  users.js        (User Routes)
+│
+├──  utils/           
+│   │   ├──  errorHandler.js   (Error Handling)
+│   │   └──  emailService.js   (Email Service)
+│
+├──  uploads/         (Optional - File Uploads)
+│
+├──  server.js        (Main Application)
+├──  package.json     (Project Metadata)
+├──  package-lock.json (Dependency Tree)
+├──  README.md        (Documentation)
+└──  .env             (Environment Variables)
+________________________________________________________________________________
+
+Project Structure
+
+Following common Node.js conventions:
+
+config/: Contains configuration files, specifically db.js for database connection setup. 
+controllers/: Holds the logic for handling requests, with separate controllers for authentication (authController.js), departments (departmentController.js), tickets (ticketController.js), topics (topicController.js), and users (userController.js). 
+middleware/: Includes middleware functions for authentication (auth.js), file uploads (upload.js), and rate limiting (rateLimit.js). 
+models/: Defines the data models using Mongoose, with schemas for Department.js, Ticket.js, Topic.js, and User.js. 
+routes/: Organizes the API routes into separate files for auth.js, departments.js, tickets.js, topics.js, and users.js. 
+utils/: Contains utility functions, such as errorHandler.js for centralized error handling and emailService.js for sending emails. 
+uploads/: (Optional) Directory for storing file uploads. 
+Root Files:
+server.js: The main entry point of the application. 
+package.json: Defines project dependencies and metadata. 
+package-lock.json: Detailed dependency tree. 
+README.md: Project documentation. 
+.env: Environment variables (not included in the repository for security). 

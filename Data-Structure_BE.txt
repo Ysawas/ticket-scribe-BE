@@ -1,0 +1,229 @@
+Data Structure Outline
+
+This outline shows the key fields and their relationships within each Mongoose schema:
+
+
+
+A. User
+│
+├──  firstName       (String, Required)
+├──  lastName        (String, Required)
+├──  username        (String, Required, Unique)
+├──  birthday        (Date)
+├──  email           (String, Required, Unique)
+├──  password        (String, Required)
+├──  emailVerified   (Boolean)
+├──  emailVerificationToken (String)
+├──  role            (String, Enum)
+├──  department      (Reference -> Department)
+└──  defaultDepartment (Reference -> Department)
+└──  status          (String, Enum)
+└──  createdAt       (Date)
+└──  updatedAt       (Date)
+│
+B. Department
+│
+├──  name            (String, Required, Unique)
+├──  description     (String)
+├──  supervisor      (Reference -> User)
+├──  manager         (Reference -> User)
+├──  members         (Array of Reference -> User)
+├──  topics          (Array of Reference -> Topic)
+├──  parentDepartment (Reference -> Department)
+└──  createdAt       (Date)
+└──  updatedAt       (Date)
+│
+C. Topic
+│
+├──  name            (String, Required, Unique)
+├──  category        (String, Required)
+├──  subcategory     (String, Required)
+├──  description     (String)
+├──  department      (Reference -> Department, Required)
+├──  version         (String)
+└──  createdAt       (Date)
+└──  updatedAt       (Date)
+│
+D. Ticket
+│
+├──  ticketNumber    (String, Required, Unique)
+├──  title           (String, Required)
+├──  description     (String, Required)
+├──  status          (String, Enum)
+├──  progress        (Number)
+├──  priority        (String, Enum)
+├──  authorId        (Reference -> User, Required)
+├──  assignedToId    (Reference -> User)
+├──  departmentId    (Reference -> Department, Required)
+├──  topicId         (Reference -> Topic, Required)
+├──  attachments     (Array of Embedded Schema)
+│   │   ├──  filename   (String, Required)
+│   │   ├──  originalname (String)
+│   │   ├──  path       (String, Required)
+│   │   ├──  mimetype   (String, Required)
+│   │   ├──  size       (Number, Required)
+│   │   ├──  uploadedBy (Reference -> User)
+│   │   └──  uploadedAt (Date)
+├──  escalatedToDepartmentId (Reference -> Department)
+├──  escalationApprovedBy  (Reference -> User)
+├──  comments        (Array of Embedded Schema)
+│   │   ├──  userId     (Reference -> User, Required)
+│   │   ├──  content    (String, Required)
+│   │   ├──  createdAt  (Date)
+│   │   └──  updatedAt  (Date)
+├──  history         (Array of Embedded Schema)
+│   │   ├──  userId     (Reference -> User, Required)
+│   │   ├──  field      (String, Required)
+│   │   ├──  oldValue   (Mixed)
+│   │   ├──  newValue   (Mixed)
+│   │   └──  timestamp  (Date)
+└──  createdAt       (Date)
+└──  updatedAt       (Date)
+
+
+
+
+
+Key Relationships to Visualize:
+
+A User can be part of a Department (as a member, supervisor, or manager) and can create or be assigned to a Ticket.
+A Department can have many Users, can contain Topics, and can be associated with Tickets.
+A Topic belongs to a Department and is associated with Tickets.
+A Ticket is created by a User, can be assigned to a User, belongs to a Department, and is categorized by a Topic.
+
+___________________________________________________________________________________________________
+
+Data Structure
+
+The data structure is defined by the Mongoose schemas in the models/ directory:
+
+Department:
+name: String, required, unique
+description: String
+supervisor: Reference to User
+manager: Reference to User
+members: Array of references to User
+topics: Array of references to Topic
+parentDepartment: Reference to Department (for hierarchical structure)
+createdAt: Date
+updatedAt: Date 
+Ticket:
+ticketNumber: String, required, unique
+title: String, required
+description: String, required
+status: String, enum ['open', 'in progress', 'resolved', 'closed'], default 'open'
+progress: Number, default 0
+priority: String, enum ['low', 'medium', 'high', 'urgent'], default 'medium'
+authorId: Reference to User, required
+assignedToId: Reference to User
+departmentId: Reference to Department, required
+topicId: Reference to Topic, required
+attachments: Array of Attachment schema
+escalatedToDepartmentId: Reference to Department
+escalationApprovedBy: Reference to User
+comments: Array of Comment schema
+history: Array of HistoryEntry schema
+createdAt: Date
+updatedAt: Date 
+Topic:
+name: String, required, unique
+category: String, required
+subcategory: String, required
+description: String
+department: Reference to Department, required
+version: String
+createdAt: Date
+updatedAt: Date 
+User:
+firstName: String, required
+lastName: String, required
+username: String, required, unique
+birthday: Date
+email: String, required, unique
+password: String, required
+emailVerified: Boolean, default false
+emailVerificationToken: String
+role: String, enum ['admin', 'manager', 'supervisor', 'agent'], default 'agent', required
+department: Reference to Department
+defaultDepartment: Reference to Department
+status: String, enum ['pending_email', 'pending_admin', 'active', 'inactive'], default 'pending_email'
+createdAt: Date
+updatedAt: Date 
+This should give you a good overview of the project and data structures! Let me know if you have any other questions.
+___________________________________________________________________________________________________
+
+
+This outline shows the key fields and their relationships within each Mongoose schema:
+
+
+Department
+│
+├──  name   (String)
+├──  description   (String)
+├──  supervisor   (mongoose, Reference -> User)
+├──  manager   (mongoose, Reference -> User)
+├──  parentDepartment   (mongoose, Reference -> Department)
+├──  createdAt   (Date)
+├──  updatedAt   (Date)
+
+Ticket
+│
+├──  userId   (mongoose, Reference -> User)
+├──  content   (String)
+├──  createdAt   (Date)
+├──  updatedAt   (Date)
+├──  userId   (mongoose, Reference -> User)
+├──  field   (String)
+├──  oldValue   (mongoose)
+├──  newValue   (mongoose)
+├──  timestamp   (Date)
+├──  filename   (String)
+├──  originalname   (String)
+├──  path   (String)
+├──  mimetype   (String)
+├──  size   (Number)
+├──  uploadedBy   (mongoose, Reference -> User)
+├──  uploadedAt   (Date)
+├──  ticketNumber   (String)
+├──  title   (String)
+├──  description   (String)
+├──  status   (String)
+├──  progress   (Number)
+├──  priority   (String)
+├──  authorId   (mongoose, Reference -> User)
+├──  assignedToId   (mongoose, Reference -> User)
+├──  departmentId   (mongoose, Reference -> Department)
+├──  topicId   (mongoose, Reference -> Topic)
+├──  escalatedToDepartmentId   (mongoose, Reference -> Department)
+├──  escalationApprovedBy   (mongoose, Reference -> User)
+├──  createdAt   (Date)
+├──  updatedAt   (Date)
+├──  createdAt
+├──  createdAt
+
+Topic
+│
+├──  name   (String)
+├──  category   (String)
+├──  subcategory   (String)
+├──  description   (String)
+├──  department   (mongoose, Reference -> Department)
+├──  version   (String)
+├──  createdAt   (Date)
+├──  updatedAt   (Date)
+
+User
+│
+├──  firstName   (String)
+├──  lastName   (String)
+├──  username   (String)
+├──  birthday   (Date)
+├──  email   (String)
+├──  password   (String)
+├──  emailVerified   (Boolean)
+├──  emailVerificationToken   (String)
+├──  role   (String)
+├──  defaultDepartment   (mongoose, Reference -> Department)
+├──  status   (String)
+├──  createdAt   (Date)
+├──  updatedAt   (Date)
