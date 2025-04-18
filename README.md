@@ -115,10 +115,10 @@ ticket-scribe-BE/
 │   ├── ticketController.js
 │   ├── topicController.js
 │   └── userController.js
-├── middleware/         # Middleware functions
+├── middleware/       # Middleware functions
 │   ├── auth.js       # Authentication middleware
 │   ├── upload.js     # File upload middleware
-│   └── rateLimit.js  # Rate limiting middleware
+│   └── isAdmin.js    # Admin Approval middleware
 ├── models/             # Mongoose schemas (data models)
 │   ├── Department.js
 │   ├── Ticket.js

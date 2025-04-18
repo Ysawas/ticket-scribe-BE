@@ -17,7 +17,7 @@ Ticket Scribe - Backend
 ├──  middleware/      
 │   │   ├──  auth.js         (Authentication)
 │   │   ├──  upload.js       (File Uploads)
-│   │   └──  isAdmin.js    (Rate Limiting)
+│   │   └──  isAdmin.js      (Admin Approval)
 │
 ├──  models/          
 │   │   ├──  Department.js   (Department Model)
